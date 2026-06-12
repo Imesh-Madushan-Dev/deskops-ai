@@ -1,0 +1,10 @@
+export { SmoothScroll } from "./SmoothScroll";
+export { Navbar } from "./Navbar";
+export { HeroSection } from "./HeroSection";
+export { MarqueeStrip } from "./MarqueeStrip";
+export { AgentsSection } from "./AgentsSection";
+export { WorkflowSection } from "./WorkflowSection";
+export { FeaturesSection } from "./FeaturesSection";
+export { FaqSection } from "./FaqSection";
+export { CtaSection } from "./CtaSection";
+export { Footer } from "./Footer";
