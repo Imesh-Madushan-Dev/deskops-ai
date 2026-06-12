@@ -87,7 +87,6 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
       {/* Form panel */}
       <main className="relative flex flex-1 items-center justify-center px-5 py-14 sm:px-10">
-        <div className="bg-grid absolute inset-0" aria-hidden />
         <div data-auth="panel" className="relative w-full max-w-md">
           <Link href="/" className="mb-10 flex items-center gap-2.5 lg:hidden">
             <span className="btn-purple flex size-9 items-center justify-center rounded-full">
