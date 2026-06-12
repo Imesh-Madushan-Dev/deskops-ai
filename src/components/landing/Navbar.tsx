@@ -35,7 +35,7 @@ export function Navbar() {
         )}
       >
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="btn-purple flex size-8 items-center justify-center rounded-full">
+          <span className="btn-purple flex size-8 items-center justify-center rounded-1xl">
             <HugeiconsIcon icon={AiBrain01Icon} size={17} color="#fff" strokeWidth={1.8} />
           </span>
           <span className="font-heading text-sm tracking-wider">
