@@ -206,7 +206,7 @@ export function HeroSection() {
           <h1 className="font-heading mt-8 text-[2.75rem] leading-[1.05] tracking-wide text-foreground sm:text-6xl md:text-7xl xl:text-[5.5rem]">
             <span data-hero="line" className="block">
               Your Back Office,
-                      </span>  <span>Run by </span>
+                      </span>  <span data-hero="line">Run by </span>
                       
             <span
               data-hero="line"
