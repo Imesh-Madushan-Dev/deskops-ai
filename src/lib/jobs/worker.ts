@@ -79,9 +79,15 @@ async function processJob(job: { business_id: string; job_type: string; payload:
     ]);
     // Drop the last row (the message we're answering — runOrchestrator appends it itself).
     const history: ModelMessage[] = (msgs ?? []).slice(0, -1).map((m) => ({ role: m.direction === "inbound" ? "user" : "assistant", content: m.body }));
+    const whatsappStyle = [
+      "You are replying to a customer on WhatsApp. Write like a warm, real shop assistant — not a robot.",
+      "Formatting (WhatsApp, NOT markdown): use *single asterisks* for bold — never **double**. Use _underscores_ for italics.",
+      "Keep messages short. Break them into a few short lines with a blank line between points, so it reads clean on a phone — never one dense block.",
+      "Mirror the customer's language: if they write Sinhala or mix Sinhala with English (Singlish), reply the same warm, casual way, using the English words Sri Lankans naturally use. Stay friendly and human.",
+    ].join("\n");
     const contextNote = conv?.customer_id
-      ? `You are chatting with an existing customer "${contactLabel(conv.customers)}" (customer id ${conv.customer_id}). Never ask them for their WhatsApp number — use this customer id directly for any invoice.`
-      : undefined;
+      ? `${whatsappStyle}\n\nYou are chatting with an existing customer "${contactLabel(conv.customers)}" (customer id ${conv.customer_id}). Never ask them for their WhatsApp number — use this customer id directly for any invoice.`
+      : whatsappStyle;
 
     const result = await runOrchestrator({ ...payload, history, contextNote, businessOverride: { businessId: job.business_id } });
     const [text, steps] = await Promise.all([result.text, result.steps]);
