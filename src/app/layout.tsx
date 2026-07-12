@@ -3,6 +3,7 @@ import { Figtree, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Providers } from "./providers";
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -38,7 +39,7 @@ export default function RootLayout({
         nasalization.variable
       )}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col"><Providers>{children}</Providers></body>
     </html>
   );
 }

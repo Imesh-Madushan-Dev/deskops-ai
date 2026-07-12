@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useDashboardOverview } from "@/lib/query/dashboard";
 
 const navigation = [
   { href: "/dashboard", label: "Overview", icon: ChartLineData01Icon, active: true },
@@ -47,6 +48,8 @@ const metrics = [
 export function DashboardPreview() {
   const [approved, setApproved] = useState(false);
   const [showActivity, setShowActivity] = useState(true);
+  const { data: overview } = useDashboardOverview();
+  const dashboardMetrics = metrics.map((metric) => metric.label === "Today&apos;s sales" ? { ...metric, value: overview ? `${overview.business.currency} ${overview.salesToday.toLocaleString()}` : metric.value } : metric.label === "Conversations" ? { ...metric, value: overview?.conversations.toString() ?? metric.value } : metric.label === "Pending approvals" ? { ...metric, value: overview?.approvals.toString() ?? metric.value } : metric.label === "Low-stock items" ? { ...metric, value: overview?.lowStock.toString() ?? metric.value } : metric);
 
   return (
     <div className="min-h-svh bg-muted/30 text-foreground">
@@ -103,7 +106,7 @@ export function DashboardPreview() {
           </div>
 
           <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {metrics.map((metric) => (
+            {dashboardMetrics.map((metric) => (
               <Card key={metric.label} className="border-border/80 shadow-sm"><CardContent className="p-5"><div className="flex items-start justify-between"><p className="text-sm text-muted-foreground">{metric.label}</p><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={metric.icon} size={18} strokeWidth={1.8} /></span></div><p className="mt-6 text-2xl font-semibold tracking-tight">{metric.label === "Pending approvals" && approved ? "2" : metric.value}</p><p className="mt-1.5 text-xs text-muted-foreground">{metric.label === "Pending approvals" && approved ? "One sent just now" : metric.note}</p></CardContent></Card>
             ))}
           </section>

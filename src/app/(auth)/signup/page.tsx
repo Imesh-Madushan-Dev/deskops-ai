@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AuthShell } from "@/components/auth/AuthShell";
-import { AuthForm } from "@/components/auth/AuthForm";
+import { SupabaseAuthForm } from "@/components/auth/SupabaseAuthForm";
 
 export const metadata: Metadata = {
   title: "Create your workspace — Deskops AI",
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function SignupPage() {
   return (
     <AuthShell>
-      <AuthForm mode="signup" />
+      <SupabaseAuthForm mode="signup" />
     </AuthShell>
   );
 }

@@ -1,0 +1,17 @@
+export const qk = {
+  overview: ["overview"] as const,
+  products: ["products"] as const,
+  product: (id: string) => ["products", id] as const,
+  inventory: ["inventory"] as const,
+  reorders: ["reorders"] as const,
+  invoices: ["invoices"] as const,
+  invoice: (id: string) => ["invoices", id] as const,
+  customers: ["customers"] as const,
+  customer: (id: string) => ["customers", id] as const,
+  conversations: ["conversations"] as const,
+  conversation: (id: string) => ["conversations", id] as const,
+  approvals: ["approvals"] as const,
+  ledger: ["ledger"] as const,
+  insights: (date: string) => ["insights", date] as const,
+  settings: ["settings"] as const,
+};
