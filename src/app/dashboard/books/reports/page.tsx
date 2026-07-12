@@ -13,7 +13,7 @@ export default function BooksReportsPage() {
 
   return (
     <>
-      <PageHeaderBar title="Reports" />
+      <PageHeaderBar title="Reports" backHref="/dashboard/books" />
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle eyebrow="This month" title="Business reports" description="Income, expenses, and category breakdowns for the current month." />
 

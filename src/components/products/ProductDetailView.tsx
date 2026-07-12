@@ -42,7 +42,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
 
   return (
     <>
-      <PageHeaderBar title="Product" />
+      <PageHeaderBar title="Product" backHref="/dashboard/products" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle eyebrow={product.sku ?? "No SKU"} title={product.name} description="Prices and reorder rules used by your agents when quoting customers." />
 

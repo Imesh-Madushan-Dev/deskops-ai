@@ -36,7 +36,7 @@ export default function NewProductPage() {
 
   return (
     <>
-      <PageHeaderBar title="New product" />
+      <PageHeaderBar title="New product" backHref="/dashboard/products" />
       <main className="mx-auto max-w-2xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle eyebrow="Create draft" title="Add a product" description="Prices and stock feed straight into your agents' quotes." />
         <Card className="mt-8 border-border/80">

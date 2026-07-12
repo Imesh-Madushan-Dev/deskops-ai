@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
 import { useConversations } from "@/lib/query/conversations";
+import { contactLabel } from "@/lib/utils/contact";
 
 export default function InboxPage() {
   const { data: conversations, isLoading } = useConversations();
@@ -25,7 +26,7 @@ export default function InboxPage() {
               <Link key={conversation.id} href={`/dashboard/inbox/${conversation.id}`} className="flex items-center gap-4 px-5 py-4 hover:bg-muted/40 sm:px-6">
                 <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={WhatsappIcon} size={19} /></span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{conversation.customers?.name ?? conversation.customers?.whatsapp_number ?? "Unknown"}</p>
+                  <p className="font-medium">{contactLabel(conversation.customers)}</p>
                   <p className="mt-1 truncate text-sm text-muted-foreground capitalize">{conversation.status}</p>
                 </div>
                 {conversation.last_message_at && <Badge variant="secondary" className="rounded-md">{new Date(conversation.last_message_at).toLocaleDateString()}</Badge>}

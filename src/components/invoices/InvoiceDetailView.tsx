@@ -33,7 +33,7 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
 
   return (
     <>
-      <PageHeaderBar title="Invoice" />
+      <PageHeaderBar title="Invoice" backHref="/dashboard/invoices" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle
           eyebrow={invoice.customers?.name ?? invoice.customers?.whatsapp_number ?? "No customer"}

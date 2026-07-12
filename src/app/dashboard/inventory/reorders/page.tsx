@@ -15,7 +15,7 @@ export default function ReordersPage() {
 
   return (
     <>
-      <PageHeaderBar title="Reorders" />
+      <PageHeaderBar title="Reorders" backHref="/dashboard/inventory" />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle eyebrow="Suggested / ordered restocks" title="Reorder suggestions" description="Track supplier reorders from suggestion through delivery." />
 

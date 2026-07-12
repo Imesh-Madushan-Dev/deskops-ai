@@ -51,7 +51,7 @@ export default function NewInvoicePage() {
 
   return (
     <>
-      <PageHeaderBar title="New invoice" />
+      <PageHeaderBar title="New invoice" backHref="/dashboard/invoices" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle eyebrow="Create draft" title="New invoice" description="Totals are computed from your catalog — never typed in by hand." />
 

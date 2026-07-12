@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyWahaSignature } from "@/lib/waha/verify";
 import { enqueueJob } from "@/lib/jobs/enqueue";
 import { runJobWorker } from "@/lib/jobs/worker";
+import { isSystemChatId } from "@/lib/utils/contact";
 
 // The agent's tool loop can take several seconds; give it room past the default.
 export const maxDuration = 60;
@@ -13,7 +14,14 @@ export const maxDuration = 60;
 const wahaEventSchema = z.object({
   event: z.string(),
   session: z.string(),
-  payload: z.object({ id: z.string(), from: z.string(), body: z.string().optional() }),
+  payload: z.object({
+    id: z.string(),
+    from: z.string(),
+    body: z.string().optional(),
+    // WAHA sends the sender's WhatsApp display name on some engines; capture it when present.
+    notifyName: z.string().optional(),
+    _data: z.object({ notifyName: z.string().optional() }).partial().optional(),
+  }),
 });
 
 export async function POST(request: Request) {
@@ -26,6 +34,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ ok: true }); // Unrecognized event shape — ack and ignore.
   const { event, session, payload } = parsed.data;
   if (event !== "message" || !payload.body) return NextResponse.json({ ok: true });
+  if (isSystemChatId(payload.from)) return NextResponse.json({ ok: true }); // status broadcasts / channels / groups — not a customer chat.
 
   const supabase = createAdminClient();
 
@@ -52,9 +61,13 @@ export async function POST(request: Request) {
   }
 
   const whatsappNumber = payload.from.replace(/@c\.us$/, "");
+  const notifyName = payload.notifyName ?? payload._data?.notifyName;
   const { data: customer, error: customerError } = await supabase
     .from("customers")
-    .upsert({ business_id: business.id, whatsapp_number: whatsappNumber }, { onConflict: "business_id,whatsapp_number" })
+    .upsert(
+      { business_id: business.id, whatsapp_number: whatsappNumber, ...(notifyName ? { name: notifyName } : {}) },
+      { onConflict: "business_id,whatsapp_number" },
+    )
     .select("id")
     .single();
   if (customerError) throw customerError;

@@ -6,6 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { contactLabel } from "@/lib/utils/contact";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +56,7 @@ export default function CustomersPage() {
                 {customers?.map((customer) => (
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium"><Link href={`/dashboard/customers/${customer.id}`} className="hover:text-primary">{customer.name ?? "Unnamed"}</Link></TableCell>
-                    <TableCell className="text-muted-foreground">{customer.whatsapp_number}</TableCell>
+                    <TableCell className="text-muted-foreground">{contactLabel({ whatsapp_number: customer.whatsapp_number })}</TableCell>
                     <TableCell className="text-muted-foreground">{customer.email ?? "—"}</TableCell>
                   </TableRow>
                 ))}

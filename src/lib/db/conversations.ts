@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { getCurrentBusiness } from "@/lib/db/auth";
 import { sendWhatsappMessage } from "@/lib/waha/client";
+import { isSystemChatId } from "@/lib/utils/contact";
 
 export async function listConversations() {
   const { supabase, business } = await getCurrentBusiness();
@@ -12,7 +13,8 @@ export async function listConversations() {
     .eq("business_id", business.id)
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
-  return data;
+  // Hide status-broadcast / channel / group chats that older webhooks may have recorded.
+  return data.filter((c) => !c.customers?.whatsapp_number || !isSystemChatId(c.customers.whatsapp_number));
 }
 
 export async function getConversation(id: string) {

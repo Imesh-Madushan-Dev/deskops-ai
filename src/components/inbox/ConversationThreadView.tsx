@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
 import { cn } from "@/lib/utils";
 import { useConversation, useSendOwnerMessage } from "@/lib/query/conversations";
+import { contactLabel } from "@/lib/utils/contact";
 
 export function ConversationThreadView({ conversationId }: { conversationId: string }) {
   const { data: conversation, isLoading } = useConversation(conversationId);
@@ -61,11 +62,11 @@ export function ConversationThreadView({ conversationId }: { conversationId: str
 
   return (
     <>
-      <PageHeaderBar title="Conversation" />
+      <PageHeaderBar title="Conversation" backHref="/dashboard/inbox" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
         <PageTitle
           eyebrow="WhatsApp"
-          title={conversation.customers?.name ?? conversation.customers?.whatsapp_number ?? "Unknown customer"}
+          title={contactLabel(conversation.customers)}
           description="Owner replies here send immediately. Agent drafts always wait for approval."
         />
 

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
 import { useCustomer } from "@/lib/query/customers";
 import { useDashboardOverview } from "@/lib/query/dashboard";
+import { contactLabel } from "@/lib/utils/contact";
 import { formatMoney } from "@/lib/utils/money";
 
 export function CustomerDetailView({ customerId }: { customerId: string }) {
@@ -18,9 +19,9 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
 
   return (
     <>
-      <PageHeaderBar title="Customer" />
+      <PageHeaderBar title="Customer" backHref="/dashboard/customers" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle eyebrow={customer.whatsapp_number} title={customer.name ?? "Unnamed customer"} description={customer.notes ?? "No notes yet."} />
+        <PageTitle eyebrow={contactLabel({ whatsapp_number: customer.whatsapp_number })} title={customer.name ?? "Unnamed customer"} description={customer.notes ?? "No notes yet."} />
 
         <section className="mt-8 grid gap-7 lg:grid-cols-2">
           <Card className="border-border/80">
