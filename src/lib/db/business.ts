@@ -12,6 +12,7 @@ export const businessInputSchema = z.object({
   whatsappSession: z.string().trim().max(120).optional().nullable(),
   aiProvider: z.enum(Object.keys(PROVIDER_CATALOG) as [string, ...string[]]).optional(),
   aiModel: z.string().trim().max(120).optional(),
+  autoApproveReplies: z.boolean().optional(),
 });
 export type BusinessInput = z.infer<typeof businessInputSchema>;
 
@@ -19,12 +20,20 @@ export async function updateBusiness(input: BusinessInput) {
   const { supabase, business } = await getCurrentBusiness();
 
   let settingsUpdate: Json | undefined;
-  if (input.aiProvider !== undefined) {
-    if (!isProviderId(input.aiProvider)) throw new Error("Unknown AI provider.");
-    const models: readonly string[] = PROVIDER_CATALOG[input.aiProvider].models;
-    const model = input.aiModel && models.includes(input.aiModel) ? input.aiModel : models[0];
+  if (input.aiProvider !== undefined || input.autoApproveReplies !== undefined) {
     const current = (typeof business.settings === "object" && business.settings !== null && !Array.isArray(business.settings) ? business.settings : {}) as Record<string, Json>;
-    settingsUpdate = { ...current, ai: { provider: input.aiProvider, model } };
+    settingsUpdate = { ...current };
+
+    if (input.aiProvider !== undefined) {
+      if (!isProviderId(input.aiProvider)) throw new Error("Unknown AI provider.");
+      const models: readonly string[] = PROVIDER_CATALOG[input.aiProvider].models;
+      const model = input.aiModel && models.includes(input.aiModel) ? input.aiModel : models[0];
+      settingsUpdate.ai = { provider: input.aiProvider, model };
+    }
+    if (input.autoApproveReplies !== undefined) {
+      const automation = (typeof current.automation === "object" && current.automation !== null && !Array.isArray(current.automation) ? current.automation : {}) as Record<string, Json>;
+      settingsUpdate.automation = { ...automation, autoApproveReplies: input.autoApproveReplies };
+    }
   }
 
   const { data, error } = await supabase

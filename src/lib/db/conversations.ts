@@ -57,7 +57,7 @@ export async function recordOwnerMessage(conversationId: string, body: string) {
     .select()
     .single();
   if (error) throw error;
-  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("business_id", business.id).eq("id", conversationId);
+  await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("business_id", business.id).eq("id", conversationId);
   return data;
 }
 

@@ -31,21 +31,7 @@ export function createSalesTools(context: ConversationToolContext) {
     },
   });
 
-  const draftReply = tool({
-    description: "Draft a WhatsApp reply to the customer and queue it for the owner's one-tap approval. Never sends automatically.",
-    inputSchema: z.object({ body: z.string().min(1).max(2000) }),
-    execute: async ({ body }) => {
-      const approval = await createApproval(
-        {
-          actionType: "send_message",
-          conversationId: context.conversationId,
-          payload: { conversationId: context.conversationId, chatId: context.chatId, body },
-        },
-        context.businessOverride,
-      );
-      return { approvalId: approval.id, status: "awaiting_owner_approval" as const };
-    },
-  });
-
-  return { draftAndQueueInvoice, draftReply };
+  // Plain conversational replies are not a tool — the agent just writes them as its answer, and the
+  // worker either auto-sends (automation on) or queues them for approval. Only money actions gate here.
+  return { draftAndQueueInvoice };
 }

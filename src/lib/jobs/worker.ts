@@ -5,6 +5,8 @@ import { runOrchestrator } from "@/lib/agents/orchestrator";
 import { getBooksSummary } from "@/lib/db/ledger";
 import { createApproval } from "@/lib/db/approvals";
 import { enqueueJob } from "@/lib/jobs/enqueue";
+import { sendWhatsappMessage } from "@/lib/waha/client";
+import { isAutoReplyEnabled } from "@/lib/db/settings";
 
 const BATCH_SIZE = 10;
 
@@ -67,13 +69,21 @@ async function processJob(job: { business_id: string; job_type: string; payload:
     const payload = job.payload as { conversationId: string; chatId: string; message: string };
     const result = await runOrchestrator({ ...payload, businessOverride: { businessId: job.business_id } });
     const [text, steps] = await Promise.all([result.text, result.steps]);
-    // draftReply / draftAndQueueInvoice already queue an approval. If the agent instead
-    // just answered in plain text (common with small models), that reply would vanish —
-    // so wrap it into a send_message draft the owner can approve.
-    const alreadyQueued = steps.some((step) => step.toolCalls.some((call) => call.toolName === "draftReply" || call.toolName === "draftAndQueueInvoice"));
-    if (!alreadyQueued && text.trim()) {
+
+    // An invoice draft always gates for owner approval (money) — don't also auto-send the text.
+    const invoiceQueued = steps.some((step) => step.toolCalls.some((call) => call.toolName === "draftAndQueueInvoice"));
+    const reply = text.trim();
+    if (invoiceQueued || !reply) return;
+
+    const supabase = createAdminClient();
+    if (await isAutoReplyEnabled(job.business_id)) {
+      const { data: biz } = await supabase.from("businesses").select("whatsapp_session").eq("id", job.business_id).single();
+      const send = await sendWhatsappMessage(biz?.whatsapp_session ?? "default", payload.chatId, reply);
+      await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: reply, provider_message_id: send.sent ? send.providerMessageId : null });
+      await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
+    } else {
       await createApproval(
-        { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: text.trim() } },
+        { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: reply } },
         { businessId: job.business_id },
       );
     }

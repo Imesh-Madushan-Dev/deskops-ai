@@ -171,6 +171,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          awaiting_reply: boolean
           business_id: string
           channel: string
           created_at: string
@@ -180,6 +181,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          awaiting_reply?: boolean
           business_id: string
           channel?: string
           created_at?: string
@@ -189,6 +191,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          awaiting_reply?: boolean
           business_id?: string
           channel?: string
           created_at?: string

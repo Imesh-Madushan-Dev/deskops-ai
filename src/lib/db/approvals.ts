@@ -91,7 +91,7 @@ async function executeApproval(actionType: ApprovalActionType, payload: unknown,
       .from("messages")
       .insert({ business_id: business.id, conversation_id: conversationId, direction: "outbound", sender: "agent", body, provider_message_id: result.sent ? result.providerMessageId : null });
     if (error) throw error;
-    await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+    await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", conversationId);
     return;
   }
 

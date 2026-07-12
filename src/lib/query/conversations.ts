@@ -28,6 +28,7 @@ export function useSendOwnerMessage(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.conversation(id) });
       qc.invalidateQueries({ queryKey: qk.conversations });
+      qc.invalidateQueries({ queryKey: qk.overview }); // inbox badge reflects the reply
     },
   });
 }

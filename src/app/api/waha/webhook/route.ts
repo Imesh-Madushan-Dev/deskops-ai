@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     .from("messages")
     .upsert({ business_id: business.id, conversation_id: conversationId, direction: "inbound", sender: "customer", body: payload.body, provider_message_id: payload.id }, { onConflict: "business_id,provider_message_id" });
   if (messageError) throw messageError;
-  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+  await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: true }).eq("id", conversationId);
 
   await enqueueJob({
     businessId: business.id,
