@@ -1,7 +1,9 @@
 import "server-only";
 
+import type { ModelMessage } from "ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runOrchestrator } from "@/lib/agents/orchestrator";
+import { contactLabel } from "@/lib/utils/contact";
 import { getBooksSummary } from "@/lib/db/ledger";
 import { createApproval } from "@/lib/db/approvals";
 import { enqueueJob } from "@/lib/jobs/enqueue";
@@ -67,7 +69,21 @@ async function claimJob(id: string) {
 async function processJob(job: { business_id: string; job_type: string; payload: unknown }) {
   if (job.job_type === "process_message") {
     const payload = job.payload as { conversationId: string; chatId: string; message: string };
-    const result = await runOrchestrator({ ...payload, businessOverride: { businessId: job.business_id } });
+    const supabase = createAdminClient();
+
+    // Give the agent the running conversation + who it's talking to, so it remembers context
+    // across messages and never asks an existing customer for their own number.
+    const [{ data: conv }, { data: msgs }] = await Promise.all([
+      supabase.from("conversations").select("customer_id, customers(name, whatsapp_number)").eq("id", payload.conversationId).single(),
+      supabase.from("messages").select("direction, body").eq("conversation_id", payload.conversationId).order("created_at").limit(30),
+    ]);
+    // Drop the last row (the message we're answering — runOrchestrator appends it itself).
+    const history: ModelMessage[] = (msgs ?? []).slice(0, -1).map((m) => ({ role: m.direction === "inbound" ? "user" : "assistant", content: m.body }));
+    const contextNote = conv?.customer_id
+      ? `You are chatting with an existing customer "${contactLabel(conv.customers)}" (customer id ${conv.customer_id}). Never ask them for their WhatsApp number — use this customer id directly for any invoice.`
+      : undefined;
+
+    const result = await runOrchestrator({ ...payload, history, contextNote, businessOverride: { businessId: job.business_id } });
     const [text, steps] = await Promise.all([result.text, result.steps]);
 
     // An invoice draft always gates for owner approval (money) — don't also auto-send the text.
@@ -75,7 +91,6 @@ async function processJob(job: { business_id: string; job_type: string; payload:
     const reply = text.trim();
     if (invoiceQueued || !reply) return;
 
-    const supabase = createAdminClient();
     if (await isAutoReplyEnabled(job.business_id)) {
       const { data: biz } = await supabase.from("businesses").select("whatsapp_session").eq("id", job.business_id).single();
       const send = await sendWhatsappMessage(biz?.whatsapp_session ?? "default", payload.chatId, reply);
