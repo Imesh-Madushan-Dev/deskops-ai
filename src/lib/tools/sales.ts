@@ -4,9 +4,9 @@ import { getCurrentBusiness } from "@/lib/db/auth";
 import { createInvoice } from "@/lib/db/invoices";
 import { createApproval } from "@/lib/db/approvals";
 import { formatMoney } from "@/lib/utils/money";
-import type { ToolContext } from "./context";
+import type { ConversationToolContext } from "./context";
 
-export function createSalesTools(context: ToolContext) {
+export function createSalesTools(context: ConversationToolContext) {
   const draftAndQueueInvoice = tool({
     description: "Draft an invoice for the items discussed and queue it for the owner's approval before sending to the customer. Prices/totals are computed from the real catalog, never invented.",
     inputSchema: z.object({

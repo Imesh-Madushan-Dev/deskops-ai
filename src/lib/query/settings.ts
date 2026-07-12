@@ -5,7 +5,18 @@ import { qk } from "./keys";
 import type { BusinessInput } from "@/lib/db/business";
 
 export type TeamMember = { user_id: string; role: "owner" | "admin" | "staff"; created_at: string };
-export type ModelInfo = { provider: string; model: string; embeddingModel: string };
+export type ModelInfo = {
+  current: { providerId: string; modelName: string };
+  embeddingModel: string;
+  providers: { id: string; label: string; models: string[]; hasKey: boolean }[];
+  usage: {
+    sinceDays: number;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    byModel: { provider: string; model: string; requests: number; inputTokens: number; outputTokens: number }[];
+  };
+};
 
 async function json<T>(response: Response): Promise<T> {
   const body = await response.json();
@@ -17,7 +28,10 @@ export function useUpdateBusiness() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: BusinessInput) => fetch("/api/business", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }).then((r) => json(r)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.overview }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.overview });
+      void qc.invalidateQueries({ queryKey: [...qk.settings, "models"] });
+    },
   });
 }
 

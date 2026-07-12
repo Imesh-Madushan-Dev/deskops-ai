@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AiBrain01Icon,
+  BubbleChatIcon,
   ChartLineData01Icon,
   CheckmarkCircle02Icon,
   InvoiceIcon,
@@ -18,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useDashboardOverview } from "@/lib/query/dashboard";
+import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
 function useAuthUser() {
   return useQuery({
@@ -64,6 +67,18 @@ function ProfileCard() {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: overview } = useDashboardOverview();
+  const [copilotOpen, setCopilotOpen] = useState(false);
+
+  // Read persisted state after mount so server and first client render agree.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is unavailable during SSR; syncing after mount is the hydration-safe pattern
+    setCopilotOpen(localStorage.getItem("copilot-open") === "true");
+  }, []);
+
+  function toggleCopilot(next: boolean) {
+    setCopilotOpen(next);
+    localStorage.setItem("copilot-open", String(next));
+  }
 
   const navigation = [
     { href: "/dashboard", label: "Overview", icon: ChartLineData01Icon },
@@ -121,7 +136,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <ProfileCard />
         </div>
       </aside>
-      <div className="lg:pl-64">{children}</div>
+      <div className={cn("lg:pl-64 transition-[padding] duration-200", copilotOpen && "xl:pr-112")}>{children}</div>
+      <CopilotPanel open={copilotOpen} onClose={() => toggleCopilot(false)} />
+      {!copilotOpen && (
+        <button
+          type="button"
+          onClick={() => toggleCopilot(true)}
+          aria-label="Open copilot"
+          className="btn-purple fixed right-5 bottom-5 z-30 flex size-12 items-center justify-center rounded-full border-0 shadow-lg transition-transform hover:scale-105"
+        >
+          <HugeiconsIcon icon={BubbleChatIcon} size={20} />
+        </button>
+      )}
     </div>
   );
 }
