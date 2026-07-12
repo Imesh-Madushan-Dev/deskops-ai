@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyWahaSignature } from "@/lib/waha/verify";
 import { enqueueJob } from "@/lib/jobs/enqueue";
+import { runJobWorker } from "@/lib/jobs/worker";
+
+// The agent's tool loop can take several seconds; give it room past the default.
+export const maxDuration = 60;
 
 /** WAHA's inbound webhook shape: { event, session, payload: { id, from, body } } for text messages.
  *  See https://waha.devlike.pro/docs/how-to/webhooks/ — adjust if your WAHA version differs. */
@@ -81,6 +85,10 @@ export async function POST(request: Request) {
   });
 
   await supabase.from("webhook_events").update({ processed_at: new Date().toISOString() }).eq("id", webhookEventId);
+
+  // Drain the queue right after responding so the agent replies within seconds
+  // instead of waiting for the next cron tick. WAHA still gets its 200 immediately.
+  after(() => runJobWorker());
 
   return NextResponse.json({ ok: true });
 }

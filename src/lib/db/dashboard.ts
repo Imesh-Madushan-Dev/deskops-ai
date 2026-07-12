@@ -12,7 +12,7 @@ export async function getDashboardOverview() {
   for (const result of [conversations, approvals, products, invoices]) if (result.error) throw result.error;
   const salesToday = (invoices.data ?? []).reduce((sum, invoice) => sum + Number(invoice.total), 0);
   return {
-    business: { ...business, whatsappConnected: Boolean(business.whatsapp_session) },
+    business: { ...business, whatsappSession: business.whatsapp_session, whatsappConnected: Boolean(business.whatsapp_session) },
     conversations: conversations.count ?? 0,
     approvals: approvals.count ?? 0,
     lowStock: products.count ?? 0,

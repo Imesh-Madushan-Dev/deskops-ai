@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runOrchestrator } from "@/lib/agents/orchestrator";
 import { getBooksSummary } from "@/lib/db/ledger";
+import { createApproval } from "@/lib/db/approvals";
 import { enqueueJob } from "@/lib/jobs/enqueue";
 
 const BATCH_SIZE = 10;
@@ -65,7 +66,17 @@ async function processJob(job: { business_id: string; job_type: string; payload:
   if (job.job_type === "process_message") {
     const payload = job.payload as { conversationId: string; chatId: string; message: string };
     const result = await runOrchestrator({ ...payload, businessOverride: { businessId: job.business_id } });
-    await result.text; // Drains the tool-calling loop to completion.
+    const [text, steps] = await Promise.all([result.text, result.steps]);
+    // draftReply / draftAndQueueInvoice already queue an approval. If the agent instead
+    // just answered in plain text (common with small models), that reply would vanish —
+    // so wrap it into a send_message draft the owner can approve.
+    const alreadyQueued = steps.some((step) => step.toolCalls.some((call) => call.toolName === "draftReply" || call.toolName === "draftAndQueueInvoice"));
+    if (!alreadyQueued && text.trim()) {
+      await createApproval(
+        { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: text.trim() } },
+        { businessId: job.business_id },
+      );
+    }
     return;
   }
 

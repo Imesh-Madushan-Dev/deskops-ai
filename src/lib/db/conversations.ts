@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getCurrentBusiness } from "@/lib/db/auth";
+import { sendWhatsappMessage } from "@/lib/waha/client";
 
 export async function listConversations() {
   const { supabase, business } = await getCurrentBusiness();
@@ -28,12 +29,29 @@ export async function getConversation(id: string) {
 
 export const outboundMessageSchema = z.object({ body: z.string().trim().min(1).max(4000) });
 
-/** Owner replies from the dashboard write straight to messages; outbound WhatsApp sends still go through the approval gate. */
+/** Owner replies from the dashboard send to the customer's WhatsApp immediately — the owner is the
+ *  human in the loop, so no approval gate. The agent's drafts still go through Approvals. */
 export async function recordOwnerMessage(conversationId: string, body: string) {
   const { supabase, business } = await getCurrentBusiness();
+
+  const { data: conversation, error: convError } = await supabase
+    .from("conversations")
+    .select("customers(whatsapp_number)")
+    .eq("business_id", business.id)
+    .eq("id", conversationId)
+    .single();
+  if (convError) throw convError;
+
+  const chatId = conversation.customers?.whatsapp_number;
+  let providerMessageId: string | null = null;
+  if (chatId) {
+    const result = await sendWhatsappMessage(business.whatsapp_session ?? "default", chatId, body);
+    if (result.sent) providerMessageId = result.providerMessageId ?? null;
+  }
+
   const { data, error } = await supabase
     .from("messages")
-    .insert({ business_id: business.id, conversation_id: conversationId, direction: "outbound", sender: "owner", body })
+    .insert({ business_id: business.id, conversation_id: conversationId, direction: "outbound", sender: "owner", body, provider_message_id: providerMessageId })
     .select()
     .single();
   if (error) throw error;

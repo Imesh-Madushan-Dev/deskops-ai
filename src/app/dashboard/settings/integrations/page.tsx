@@ -50,8 +50,8 @@ export default function IntegrationsSettingsPage() {
           <form action={submit} className="mt-5 space-y-4 border-t border-border/70 pt-5">
             <div className="space-y-1.5">
               <Label htmlFor="whatsappSession">WAHA session name</Label>
-              <Input id="whatsappSession" name="whatsappSession" placeholder="e.g. default" />
-              <p className="text-xs text-muted-foreground">Must match the session name configured in your WAHA instance (WAHA_BASE_URL / WAHA_API_KEY env vars).</p>
+              <Input key={overview?.business.whatsappSession ?? ""} id="whatsappSession" name="whatsappSession" placeholder="e.g. default" defaultValue={overview?.business.whatsappSession ?? ""} />
+              <p className="text-xs text-muted-foreground">Must match the session name configured in your WAHA instance — case-sensitive.</p>
             </div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {saved && <p className="text-sm text-[#047857]">Saved.</p>}
