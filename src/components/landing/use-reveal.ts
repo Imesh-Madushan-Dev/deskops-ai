@@ -12,6 +12,8 @@ export function useReveal<T extends HTMLElement>() {
   const ref = useRef<T>(null);
 
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     gsap.registerPlugin(ScrollTrigger);
     const ctx = gsap.context(() => {
       gsap.utils
@@ -23,7 +25,7 @@ export function useReveal<T extends HTMLElement>() {
             duration: 0.9,
             ease: "power3.out",
             delay: Number(el.dataset.revealDelay ?? 0),
-            scrollTrigger: { trigger: el, start: "top 85%" },
+            scrollTrigger: { trigger: el, start: "top 85%", once: true },
           });
         });
     }, ref);

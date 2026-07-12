@@ -22,6 +22,8 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
   const scope = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const ctx = gsap.context(() => {
       gsap
         .timeline({ defaults: { ease: "power3.out", duration: 0.8 } })

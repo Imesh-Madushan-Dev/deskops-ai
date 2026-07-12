@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -31,6 +31,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [done, setDone] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
   const [email, setEmail] = useState("");
+  const timers = useRef<number[]>([]);
 
   const isLogin = mode === "login";
   const isMagic = method === "magic";
@@ -41,20 +42,26 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setDone(false);
   };
 
+  useEffect(() => {
+    return () => timers.current.forEach((timer) => window.clearTimeout(timer));
+  }, []);
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting || done || magicSent) return;
     setSubmitting(true);
     // Auth backend isn't wired yet — simulate the round trip.
-    window.setTimeout(() => {
+    const submitTimer = window.setTimeout(() => {
       setSubmitting(false);
       if (isMagic) {
         setMagicSent(true);
       } else {
         setDone(true);
-        window.setTimeout(() => router.push("/"), 900);
+        const redirectTimer = window.setTimeout(() => router.push("/"), 900);
+        timers.current.push(redirectTimer);
       }
     }, 1200);
+    timers.current.push(submitTimer);
   };
 
   return (

@@ -98,6 +98,9 @@ export function HeroSection() {
   const [stage, setStage] = useState<Stage>("idle");
 
   useEffect(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+
     const ctx = gsap.context(() => {
       gsap
         .timeline({ defaults: { ease: "power3.out", duration: 0.9 } })
@@ -135,7 +138,7 @@ export function HeroSection() {
   // subtle 3D tilt following the cursor over the window
   useEffect(() => {
     const el = windowRef.current;
-    if (!el) return;
+    if (!el || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     const qx = gsap.quickTo(el, "rotationY", { duration: 0.6, ease: "power3.out" });
     const qy = gsap.quickTo(el, "rotationX", { duration: 0.6, ease: "power3.out" });
     gsap.set(el, { transformPerspective: 1400 });
