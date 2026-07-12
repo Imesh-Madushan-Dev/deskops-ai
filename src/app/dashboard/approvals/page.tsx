@@ -26,6 +26,11 @@ export default function ApprovalsPage() {
         <PageTitle eyebrow={`${approvals?.length ?? 0} waiting for you`} title="Approvals" description="Nothing leaves Deskops until you give the go-ahead." />
 
         <div className="mt-8 space-y-4">
+          {decide.isError && (
+            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {decide.error instanceof Error ? decide.error.message : "Action failed."}
+            </p>
+          )}
           {isLoading && <p className="text-center text-sm text-muted-foreground">Loading…</p>}
           {!isLoading && approvals?.length === 0 && (
             <Card className="border-border/80"><CardContent className="py-16 text-center text-sm text-muted-foreground">Nothing pending — you&apos;re all caught up.</CardContent></Card>
