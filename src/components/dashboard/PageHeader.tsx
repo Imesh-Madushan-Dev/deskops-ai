@@ -3,13 +3,17 @@ import { AiBrain01Icon } from "@hugeicons/core-free-icons";
 
 export function PageHeaderBar({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-border/70 bg-background/85 px-4 backdrop-blur-xl sm:px-8">
+    <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b border-border/70 bg-background/85 px-4 backdrop-blur-xl sm:px-8">
       <div className="flex items-center gap-3 lg:hidden">
         <span className="btn-purple flex size-9 items-center justify-center rounded-xl"><HugeiconsIcon icon={AiBrain01Icon} size={18} /></span>
         <span className="text-sm font-semibold tracking-wide">Deskops AI</span>
       </div>
-      <p className="hidden font-mono text-xs tracking-[0.15em] text-muted-foreground uppercase lg:block">{title}</p>
-      <div>{action}</div>
+      <nav aria-label="Breadcrumb" className="hidden items-center gap-2 text-sm lg:flex">
+        <span className="text-muted-foreground">Dashboard</span>
+        <span className="text-muted-foreground/40">/</span>
+        <span className="font-medium text-foreground">{title}</span>
+      </nav>
+      <div className="flex items-center gap-2">{action}</div>
     </header>
   );
 }

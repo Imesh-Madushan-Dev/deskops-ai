@@ -25,18 +25,20 @@ export async function ensureOwnerBusiness(input: { businessName: string }) {
   if (existingError) throw existingError;
   if (existing) return existing;
 
-  const { data: business, error: businessError } = await supabase
+  // No .select() on the insert: INSERT ... RETURNING must pass the SELECT policy,
+  // whose stable business_ids_for_current_user() can't see the row mid-statement,
+  // so it fails with an RLS violation. Generate the id here instead.
+  const businessId = crypto.randomUUID();
+  const { error: businessError } = await supabase
     .from("businesses")
-    .insert({ owner_user_id: userId, name: businessName })
-    .select("id")
-    .single();
+    .insert({ id: businessId, owner_user_id: userId, name: businessName });
 
   if (businessError) throw businessError;
 
   const { error: membershipError } = await supabase
     .from("business_members")
-    .upsert({ business_id: business.id, user_id: userId, role: "owner" });
+    .upsert({ business_id: businessId, user_id: userId, role: "owner" });
 
   if (membershipError) throw membershipError;
-  return business;
+  return { id: businessId };
 }

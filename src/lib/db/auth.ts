@@ -22,6 +22,6 @@ export async function getCurrentBusiness(override?: { businessId: string }) {
   const { supabase } = await requireUser();
   const { data, error } = await supabase.from("businesses").select("id,name,currency,timezone,whatsapp_session").order("created_at").limit(1).maybeSingle();
   if (error) throw error;
-  if (!data) redirect("/signup");
+  if (!data) redirect("/onboarding");
   return { supabase, business: data };
 }
