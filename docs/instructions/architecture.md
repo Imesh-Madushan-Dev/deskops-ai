@@ -23,7 +23,7 @@
 
 ## 1. High-level architecture
 
-Everything runs on a single **Next.js** app on **Vercel**: Server Components render the owner dashboard, API routes host the agents through the **Vercel AI SDK**, the browser uses **TanStack Query** for live data, **Supabase** (Postgres + pgvector + Auth) is the single data backbone, and **WAHA** bridges WhatsApp. The model is provider-swappable — **Gemini** today, Claude/GPT later — behind one wrapper.
+Everything runs on a single **Next.js** app on **Vercel**: Server Components render the owner dashboard, API routes host the agents through the **Vercel AI SDK**, the browser uses **TanStack Query** for live data, **Supabase** (Postgres + pgvector + Auth) is the single data backbone, and **WAHA** bridges WhatsApp. The model is provider-swappable — **Gemini** today, Claude/GPT later — behind one wrapper. The webhook validates, deduplicates, and queues work only; an async worker runs agents and retries outbound work.
 
 ```mermaid
 flowchart TD
@@ -56,6 +56,8 @@ flowchart TD
 **Orchestrator (Planner)**
 
 Reads the incoming intent, decides which specialist(s) to involve, sequences their work, and assembles the final response. The "brain" of the multi-agent system.
+
+Specialists are scoped prompt/tool sets invoked by this orchestrator, not independently running processes. This keeps permission checks and tracing in one place.
 
 </aside>
 
@@ -143,6 +145,8 @@ A simplified view of the core tables. The **full schema** — all 20+ tables, RL
 2. **Retrieve** — on each request, the Orchestrator pulls the top-k relevant chunks via pgvector similarity search, scoped to the business.
 3. **Ground** — retrieved context is injected into the agent prompt so answers cite real data, not guesses.
 
+**RAG rules:** use one configured embedding model and align its dimension with `embeddings.embedding`; chunk documents consistently, delete/re-index chunks when `content_hash` changes, and use clarification or human handoff when no result passes the retrieval threshold.
+
 ## 6. Guardrails layer
 
 <aside>
@@ -156,6 +160,8 @@ No agent touches the real world without passing these checks — this is the **e
 - **PII handling** — customer numbers and personal data are redacted from logs and model traces.
 - **Numeric verification** — financial figures are computed in code, never hallucinated by the model; the agent only formats them.
 - **Scope isolation** — every query is filtered by `business_id` so no business can ever see another's data.
+- **Approval execution** — only business `owner`/`admin` users may approve. Approvals expire after 24 hours; sending is idempotent, logged, and retried safely after a provider failure.
+- **Daily insight delivery** — a scheduled worker creates one `daily_insights` row per business/date using that business's timezone. If generation fails, retain deterministic metrics and flag the insight for retry rather than sending an invented summary.
 
 ## 7. Tech-to-concept mapping
 

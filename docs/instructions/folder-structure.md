@@ -106,6 +106,9 @@ deskops-ai/
 │  │  ├─ waha/
 │  │  │  ├─ client.ts                   # Send messages
 │  │  │  └─ verify.ts                   # Webhook signature check
+│  │  ├─ jobs/                          # Async webhook/approval/insight workers
+│  │  │  ├─ enqueue.ts
+│  │  │  └─ worker.ts
 │  │  └─ utils/
 │  │     ├─ money.ts                    # numeric math + formatting
 │  │     └─ validation.ts               # shared zod schemas

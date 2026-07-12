@@ -24,6 +24,7 @@
 | `approvals` | Human-in-the-loop gate for agent actions |
 | `model_usage` | Token + cost tracking per request |
 | `webhook_events` | Inbound event dedupe (idempotency) |
+| `jobs` | Async webhook, approval-send, and daily-insight work |
 | `audit_logs` / `daily_insights` | Action trail and cached daily summaries |
 
 ## Extensions, helpers & triggers
@@ -115,6 +116,7 @@ create table messages (
   unique (business_id, waha_message_id)
 );
 create index on messages (conversation_id, created_at);
+create index on messages (business_id, created_at);
 ```
 
 ## Catalog & inventory
@@ -195,6 +197,7 @@ create table invoice_items (
   line_total numeric(12,2) not null
 );
 create index on invoice_items (invoice_id);
+create index on invoice_items (business_id);
 
 create table payments (
   id uuid primary key default gen_random_uuid(),
@@ -204,6 +207,7 @@ create table payments (
   method text not null default 'cash',     -- cash|bank|card|other
   paid_at timestamptz default now()
 );
+create index on payments (business_id, invoice_id);
 
 create table ledger_entries (
   id uuid primary key default gen_random_uuid(),
@@ -261,6 +265,7 @@ create table approvals (
   payload jsonb not null,
   status text not null default 'pending',  -- pending|approved|rejected|expired
   idempotency_key text unique,
+  expires_at timestamptz not null default (now() + interval '24 hours'),
   decided_by uuid references auth.users(id),
   decided_at timestamptz,
   created_at timestamptz default now()
@@ -289,6 +294,22 @@ create table webhook_events (
   created_at timestamptz default now(),
   unique (provider, external_id)
 );
+
+-- Webhooks create a job and return immediately. A worker claims/retries jobs.
+create table jobs (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references businesses(id) on delete cascade,
+  webhook_event_id uuid unique references webhook_events(id) on delete cascade,
+  type text not null,                     -- process_message|send_approved_action|daily_insight
+  payload jsonb not null default '{}',
+  status text not null default 'pending',  -- pending|processing|completed|failed
+  attempts integer not null default 0,
+  run_after timestamptz not null default now(),
+  last_error text,
+  created_at timestamptz default now(),
+  completed_at timestamptz
+);
+create index on jobs (status, run_after);
 
 create table audit_logs (
   id uuid primary key default gen_random_uuid(),
@@ -346,19 +367,25 @@ $$;
 ## Atomic sale (single transaction)
 
 ```sql
--- Decrement stock, log movements, write the ledger, mark paid — all-or-nothing
+-- Lock invoice/products, verify availability, then write payment, stock and ledger once.
 create or replace function record_sale(p_invoice_id uuid)
 returns void language plpgsql as $$
-declare item record; biz uuid;
+declare item record; inv invoices%rowtype;
 begin
-  select business_id into biz from invoices where id = p_invoice_id;
+  select * into inv from invoices where id = p_invoice_id for update;
+  if not found then raise exception 'Invoice not found'; end if;
+  if inv.status = 'paid' then return; end if;
+  if inv.status not in ('sent', 'draft') then raise exception 'Invoice cannot be paid'; end if;
   for item in select * from invoice_items where invoice_id = p_invoice_id loop
-    update products set stock_qty = stock_qty - item.qty where id = item.product_id;
+    update products set stock_qty = stock_qty - item.qty
+      where id = item.product_id and business_id = inv.business_id and stock_qty >= item.qty;
+    if not found then raise exception 'Insufficient stock for product %', item.product_id; end if;
     insert into stock_movements(business_id, product_id, delta, reason, ref_id)
-    values (biz, item.product_id, -item.qty, 'sale', p_invoice_id);
+    values (inv.business_id, item.product_id, -item.qty, 'sale', p_invoice_id);
   end loop;
+  insert into payments(business_id, invoice_id, amount) values (inv.business_id, inv.id, inv.total);
   insert into ledger_entries(business_id, type, amount, category, ref_invoice_id)
-  select business_id, 'income', total, 'sales', id from invoices where id = p_invoice_id;
+  values (inv.business_id, 'income', inv.total, 'sales', inv.id);
   update invoices set status = 'paid' where id = p_invoice_id;
 end; $$;
 ```
@@ -386,6 +413,7 @@ alter table approvals         enable row level security;
 alter table model_usage       enable row level security;
 alter table audit_logs        enable row level security;
 alter table daily_insights    enable row level security;
+alter table jobs              enable row level security;
 
 -- Businesses: members read; only the owner manages ownership
 create policy "members read business" on businesses
@@ -403,13 +431,13 @@ create policy "own business" on customers
 --   business_members, conversations, messages, product_categories,
 --   suppliers, products, stock_movements, invoices, invoice_items,
 --   payments, ledger_entries, reorders, documents, embeddings,
---   approvals, model_usage, audit_logs, daily_insights
+--   approvals, model_usage, audit_logs, daily_insights, jobs
 ```
 
 <aside>
 ⚠️
 
-**RLS is non-negotiable.** Enable it on every business-scoped table from day one. `webhook_events` has **no** RLS — it is written only by the WAHA webhook using the server-only `service_role` client, which bypasses RLS. Never expose that key to the browser.
+**RLS is non-negotiable.** Enable it on every business-scoped table from day one. `webhook_events` has **no** RLS and no browser access: it is written only by the verified WAHA webhook using the server-only `service_role` client. The webhook resolves the WAHA session to a business before creating its related `jobs` row. Never expose that key to the browser.
 
 </aside>
 
@@ -419,3 +447,4 @@ create policy "own business" on customers
 - Stock changes and sale logging run inside `record_sale()` (one transaction) so they can't desync.
 - Use `idempotency_key` on approvals and `unique` constraints on `webhook_events` / `messages` to prevent double-processing and double-sending.
 - Index every `business_id` and foreign key; use the Supabase connection pooler (pgbouncer) for serverless.
+- Store timestamps in UTC and render them using `businesses.timezone` (default `Asia/Colombo`). Tax and invoice numbers are deterministic application rules; the model may explain totals but never calculate them.

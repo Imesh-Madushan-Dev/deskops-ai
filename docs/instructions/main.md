@@ -206,7 +206,7 @@ export default async function Page({ businessId }: { businessId: string }) {
 
 ## 6. Database design
 
-The **complete schema** lives on its own page so this guide stays readable: see [**Deskops AI — Database Design**](Deskops%20AI%20%E2%80%94%20Database%20Design%2037cb2508c40e80e0b308ce7db628d3e5.md) below. That page is authoritative — keep `supabase/migrations` in sync with it.
+The **complete schema** lives on its own page so this guide stays readable: see [**Deskops AI — Database Design**](./database-design.md) below. That page is authoritative — keep `supabase/migrations` in sync with it.
 
 <aside>
 🗄️
@@ -239,7 +239,7 @@ The **complete schema** lives on its own page so this guide stays readable: see 
 
 ## 8. Best practices
 
-- **Human-in-the-loop:** every money/message action writes an `approvals` row and waits. The agent never sends autonomously.
+- **Human-in-the-loop:** every money/message action writes an `approvals` row and waits. The agent never sends autonomously. Only an `owner` or `admin` can approve; approvals expire after 24 hours and use one idempotency key through execution/retry.
 - **Deterministic math in code**, formatting in the model. Verify any number the model echoes against the DB.
 - **Structured outputs:** use zod-validated tool results; reject/repair malformed model output instead of trusting it.
 - **Observability:** log every agent step, tool call, and token cost with a `trace_id` (mirror into `model_usage`).
@@ -268,7 +268,7 @@ Anti-patterns that will cost points (and break in production).
 
 ## 10. Things easy to miss
 
-- **WAHA webhook security:** verify the shared secret/signature and that the session is yours before processing. Dedupe via `webhook_events`.
+- **WAHA webhook security:** verify the shared secret/signature and that the session is yours before processing. Dedupe via `webhook_events`, return quickly, and process the event asynchronously. Retain failed jobs for retry and human review.
 - **Idempotency everywhere:** WhatsApp and webhooks redeliver; dedupe by message id.
 - **Rate limiting & abuse:** throttle inbound messages per number; cap model spend per business per day.
 - **Cost guardrails:** track tokens per request in `model_usage`; set a hard monthly budget alarm.
@@ -301,6 +301,6 @@ UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 ```
 
-[Deskops AI — Database Design](Deskops%20AI%20%E2%80%94%20Database%20Design%2037cb2508c40e80e0b308ce7db628d3e5.md)
+[Deskops AI — Database Design](./database-design.md)
 
-[Deskops AI — Project Structure & Routes](Deskops%20AI%20%E2%80%94%20Project%20Structure%20&%20Routes%2016b2633602d94b5bb2d4b7dd492bff9b.md)
+[Deskops AI — Project Structure & Routes](./folder-structure.md)
