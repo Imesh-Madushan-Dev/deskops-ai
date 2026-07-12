@@ -2,16 +2,56 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { AiBrain01Icon, Cancel01Icon, SentIcon } from "@hugeicons/core-free-icons";
+import { AiBrain01Icon, Cancel01Icon, Copy01Icon, SentIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+type ChatMessage = { role: "user" | "assistant"; content: string; at: number };
 
 const SUGGESTIONS = ["What sold today?", "What's low on stock?", "Summarize this page for me"];
+
+const timeFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
+
+function AssistantMessage({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  if (!message.content) {
+    return <span className="t-shimmer text-sm" data-text="Thinking…">Thinking…</span>;
+  }
+
+  return (
+    <div>
+      <div className="copilot-md overflow-x-auto text-sm leading-relaxed">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+      </div>
+      {!streaming && (
+        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span>{timeFormat.format(message.at)}</span>
+          <button
+            type="button"
+            onClick={() => void copy()}
+            aria-label="Copy response"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} size={12} />
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
@@ -30,14 +70,15 @@ export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => 
     if (!message || streaming) return;
     setError(null);
     setDraft("");
-    const thread: ChatMessage[] = [...messages, { role: "user", content: message }];
-    setMessages([...thread, { role: "assistant", content: "" }]);
+    const thread: ChatMessage[] = [...messages, { role: "user", content: message, at: Date.now() }];
+    const replyAt = Date.now();
+    setMessages([...thread, { role: "assistant", content: "", at: replyAt }]);
     setStreaming(true);
     try {
       const response = await fetch("/api/copilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: thread.slice(-20), path: pathname }),
+        body: JSON.stringify({ messages: thread.slice(-20).map(({ role, content }) => ({ role, content })), path: pathname }),
       });
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => null) as { error?: string } | null;
@@ -51,7 +92,7 @@ export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => 
         if (done) break;
         reply += decoder.decode(value, { stream: true });
         const current = reply;
-        setMessages([...thread, { role: "assistant", content: current }]);
+        setMessages([...thread, { role: "assistant", content: current, at: replyAt }]);
       }
       if (!reply.trim()) setMessages(thread);
     } catch (err) {
@@ -84,7 +125,7 @@ export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => 
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 && (
           <div className="mt-6 space-y-3">
             <p className="text-center text-sm text-muted-foreground">Ask anything about your business — sales, stock, customers, books.</p>
@@ -102,18 +143,17 @@ export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => 
             </div>
           </div>
         )}
-        {messages.map((message, index) => (
-          <div key={index} className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}>
-            <div
-              className={cn(
-                "max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm",
-                message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted",
-              )}
-            >
-              {message.content || <Spinner className="my-1" />}
+        {messages.map((message, index) =>
+          message.role === "user" ? (
+            <div key={index} className="flex justify-end">
+              <div className="max-w-[85%] rounded-xl rounded-br-sm bg-primary px-3 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
+                {message.content}
+              </div>
             </div>
-          </div>
-        ))}
+          ) : (
+            <AssistantMessage key={index} message={message} streaming={streaming && index === messages.length - 1} />
+          ),
+        )}
         {error && <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
       </div>
 

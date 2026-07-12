@@ -14,8 +14,9 @@ const wahaEventSchema = z.object({
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const signature = request.headers.get("x-webhook-signature") ?? request.headers.get("x-waha-signature");
-  if (!verifyWahaSignature(rawBody, signature)) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  const signature = request.headers.get("x-webhook-hmac") ?? request.headers.get("x-webhook-signature") ?? request.headers.get("x-waha-signature");
+  const algorithm = request.headers.get("x-webhook-hmac-algorithm") ?? (request.headers.has("x-webhook-hmac") ? "sha512" : "sha256");
+  if (!verifyWahaSignature(rawBody, signature, algorithm)) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 
   const parsed = wahaEventSchema.safeParse(JSON.parse(rawBody));
   if (!parsed.success) return NextResponse.json({ ok: true }); // Unrecognized event shape — ack and ignore.
