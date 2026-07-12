@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { DashboardPreview } from "@/components/dashboard/DashboardPreview";
+import { OverviewView } from "@/components/dashboard/OverviewView";
 
 export const metadata: Metadata = {
   title: "Dashboard — Deskops AI",
-  description: "Hardcoded Deskops AI dashboard preview.",
+  description: "Live overview of approvals, sales, and inventory.",
 };
 
 export default function DashboardPage() {
-  return <DashboardPreview />;
+  return <OverviewView />;
 }
