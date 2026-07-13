@@ -1,23 +1,14 @@
 "use client";
 
 import { HugeiconsIcon } from "@hugeicons/react";
-import { CheckmarkCircle02Icon, Cancel01Icon, InvoiceIcon, PackageIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
-import { Badge } from "@/components/ui/badge";
+import { Cancel01Icon, CheckmarkCircle02Icon, InvoiceIcon, ShieldIcon, Tick02Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
 import { useApprovals, useDecideApproval } from "@/lib/query/approvals";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { useUpdateBusiness } from "@/lib/query/settings";
-
-const actionMeta: Record<string, { label: string; icon: typeof InvoiceIcon }> = {
-  send_message: { label: "WhatsApp reply", icon: WhatsappIcon },
-  send_invoice: { label: "Send invoice", icon: InvoiceIcon },
-  mark_invoice_paid: { label: "Mark invoice paid", icon: InvoiceIcon },
-  reorder: { label: "Create reorder", icon: PackageIcon },
-};
+import { approvalMeta, describeApproval, EmptyState, PageIntro, PageShell, Panel, relativeTime, StatusPill } from "@/components/dashboard/ui";
 
 export default function ApprovalsPage() {
   const { data: approvals, isLoading } = useApprovals();
@@ -26,89 +17,85 @@ export default function ApprovalsPage() {
   const updateBusiness = useUpdateBusiness();
   const autoReply = overview?.business.autoApproveReplies ?? false;
   const autoInvoice = overview?.business.autoApproveInvoices ?? false;
+  const pending = approvals ?? [];
 
   return (
-    <>
-      <PageHeaderBar title="Approvals" />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle eyebrow={`${approvals?.length ?? 0} waiting for you`} title="Approvals" description="Nothing leaves Deskops until you give the go-ahead." />
+    <PageShell crumbs={["Approvals"]} width="max-w-4xl">
+      <PageIntro
+        eyebrow="Human in the loop"
+        title="Approvals"
+        description="Every money or message action the agents draft stops here. Nothing reaches a customer until you tap approve."
+        action={pending.length > 0 ? <StatusPill tone="warn" dot={false} className="px-3 py-1 text-sm">{pending.length} waiting</StatusPill> : <StatusPill tone="ok" dot={false} className="px-3 py-1 text-sm">All clear</StatusPill>}
+      />
 
-        <Card className="mt-8 border-primary/20 bg-primary/5">
-          <CardContent className="divide-y divide-border/60 p-0">
-            <div className="flex items-center gap-4 p-5">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={WhatsappIcon} size={20} /></span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Auto-reply to customer messages</p>
-                <p className="text-xs text-muted-foreground">The agent answers customers automatically, without waiting for you.</p>
-              </div>
-              <Switch
-                checked={autoReply}
-                disabled={updateBusiness.isPending || !overview}
-                onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveReplies: checked })}
-                aria-label="Toggle auto-reply"
-              />
+      <Panel title="Autopilot" sub="Choose which actions may skip the queue — money actions can always be held.">
+        <div className="divide-y divide-border/60">
+          <div className="flex items-center gap-4 px-5 py-4">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={WhatsappIcon} size={19} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Auto-reply to customer messages</p>
+              <p className="text-xs text-muted-foreground">The agent answers customers automatically, without waiting for you.</p>
             </div>
-            <div className="flex items-center gap-4 p-5">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={InvoiceIcon} size={20} /></span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Auto-send invoices</p>
-                <p className="text-xs text-muted-foreground">When off, invoices the agent drafts wait here for your approval before they reach the customer.</p>
-              </div>
-              <Switch
-                checked={autoInvoice}
-                disabled={updateBusiness.isPending || !overview}
-                onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveInvoices: checked })}
-                aria-label="Toggle auto-send invoices"
-              />
+            <Switch checked={autoReply} disabled={updateBusiness.isPending || !overview} onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveReplies: checked })} aria-label="Toggle auto-reply" />
+          </div>
+          <div className="flex items-center gap-4 px-5 py-4">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={InvoiceIcon} size={19} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Auto-send invoices</p>
+              <p className="text-xs text-muted-foreground">When off, agent-drafted invoices wait here before they reach the customer.</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <div className="mt-6 space-y-4">
-          {decide.isError && (
-            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {decide.error instanceof Error ? decide.error.message : "Action failed."}
-            </p>
-          )}
-          {isLoading && <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>}
-          {!isLoading && approvals?.length === 0 && (
-            <Card className="border-border/80"><CardContent className="py-16 text-center text-sm text-muted-foreground">
-              {autoReply ? "Auto-reply is on — replies send without waiting here. Money actions will still appear for approval." : "Nothing pending — you're all caught up."}
-            </CardContent></Card>
-          )}
-          {approvals?.map((approval) => {
-            const meta = actionMeta[approval.action_type] ?? { label: approval.action_type, icon: CheckmarkCircle02Icon };
-            return (
-              <Card key={approval.id} className="overflow-hidden border-border/80">
-                <CardContent className="p-5 sm:p-6">
-                  <div className="flex items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={meta.icon} size={19} /></span>
-                    <div className="min-w-0 flex-1">
-                      <Badge className="rounded-md bg-primary/10 text-primary hover:bg-primary/10">{meta.label}</Badge>
-                      <p className="mt-2.5 text-sm text-foreground/90">{describePayload(approval.payload)}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Requested {new Date(approval.created_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <div className="mt-5 flex flex-wrap gap-3 pl-0 sm:pl-13">
-                    <Button disabled={decide.isPending} onClick={() => decide.mutate({ id: approval.id, action: "approve" })} className="btn-purple h-10 rounded-md border-0 px-5">
-                      {decide.isPending ? <Spinner /> : <HugeiconsIcon icon={CheckmarkCircle02Icon} size={17} />} Approve &amp; send
-                    </Button>
-                    <Button variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: approval.id, action: "reject" })} className="h-10 rounded-md px-5">
-                      <HugeiconsIcon icon={Cancel01Icon} size={17} /> Reject
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+            <Switch checked={autoInvoice} disabled={updateBusiness.isPending || !overview} onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveInvoices: checked })} aria-label="Toggle auto-send invoices" />
+          </div>
         </div>
-      </main>
-    </>
-  );
-}
+      </Panel>
 
-function describePayload(payload: Record<string, unknown>) {
-  if (typeof payload.body === "string") return payload.body;
-  if (typeof payload.invoiceId === "string") return `Invoice ${payload.invoiceId}`;
-  return JSON.stringify(payload);
+      <div className="mt-6 space-y-4">
+        {decide.isError && (
+          <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {decide.error instanceof Error ? decide.error.message : "Action failed."}
+          </p>
+        )}
+        {isLoading && <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>}
+        {!isLoading && pending.length === 0 && (
+          <Panel>
+            <EmptyState
+              icon={CheckmarkCircle02Icon}
+              title={autoReply ? "Auto-reply is on" : "Nothing pending"}
+              hint={autoReply ? "Replies send without waiting here — money actions will still stop for approval." : "You're all caught up. New drafts appear here in real time."}
+            />
+          </Panel>
+        )}
+        {pending.map((approval) => {
+          const meta = approvalMeta[approval.action_type] ?? { label: approval.action_type, icon: CheckmarkCircle02Icon };
+          const expiresSoon = new Date(approval.expires_at).getTime() - Date.now() < 4 * 3600_000;
+          return (
+            <Panel key={approval.id}>
+              <div className="p-5">
+                <div className="flex items-start gap-3.5">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={meta.icon} size={19} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusPill tone="brand" dot={false}>{meta.label}</StatusPill>
+                      <span className="text-xs text-muted-foreground">requested {relativeTime(approval.created_at)}</span>
+                      {expiresSoon && <StatusPill tone="warn" dot={false}>expires {relativeTime(approval.expires_at)}</StatusPill>}
+                    </div>
+                    <p className="mt-2.5 rounded-xl border border-border/60 bg-muted/30 px-3.5 py-2.5 text-sm leading-6 whitespace-pre-wrap text-foreground/90">{describeApproval(approval.payload)}</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:pl-13.5">
+                  <Button disabled={decide.isPending} onClick={() => decide.mutate({ id: approval.id, action: "approve" })} className="btn-purple h-9 rounded-lg border-0 px-4">
+                    {decide.isPending ? <Spinner /> : <HugeiconsIcon icon={Tick02Icon} size={16} />} Approve &amp; send
+                  </Button>
+                  <Button variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: approval.id, action: "reject" })} className="h-9 rounded-lg px-4">
+                    <HugeiconsIcon icon={Cancel01Icon} size={16} /> Reject
+                  </Button>
+                  <span className="ml-auto hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex"><HugeiconsIcon icon={ShieldIcon} size={13} /> Idempotent — safe to retry</span>
+                </div>
+              </div>
+            </Panel>
+          );
+        })}
+      </div>
+    </PageShell>
+  );
 }

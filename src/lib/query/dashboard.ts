@@ -17,6 +17,7 @@ export function useDashboardOverview() {
       if (!response.ok) throw new Error("Unable to load dashboard");
       return response.json() as Promise<Overview>;
     },
-    refetchInterval: 15_000, // keep the sidebar badges live
+    // Live updates come from useRealtimeSync; this is only a slow safety net for the badges.
+    refetchInterval: 120_000,
   });
 }

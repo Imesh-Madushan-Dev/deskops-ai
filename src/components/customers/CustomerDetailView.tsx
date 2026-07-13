@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
+import { PageIntro, PageShell } from "@/components/dashboard/ui";
 import { useCustomer } from "@/lib/query/customers";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { contactLabel } from "@/lib/utils/contact";
@@ -18,10 +18,8 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
   if (!customer) return <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">Customer not found.</main>;
 
   return (
-    <>
-      <PageHeaderBar title="Customer" backHref="/dashboard/customers" />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle eyebrow={contactLabel({ whatsapp_number: customer.whatsapp_number })} title={customer.name ?? "Unnamed customer"} description={customer.notes ?? "No notes yet."} />
+    <PageShell crumbs={[{ label: "Customers", href: "/dashboard/customers" }, customer.name ?? "Customer"]} width="max-w-3xl">
+      <PageIntro eyebrow={contactLabel({ whatsapp_number: customer.whatsapp_number })} title={customer.name ?? "Unnamed customer"} description={customer.notes ?? "No notes yet."} />
 
         <section className="mt-8 grid gap-7 lg:grid-cols-2">
           <Card className="border-border/80">
@@ -54,7 +52,6 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
             </CardContent>
           </Card>
         </section>
-      </main>
-    </>
+    </PageShell>
   );
 }

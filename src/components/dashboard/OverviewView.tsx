@@ -1,127 +1,191 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { AiBrain01Icon, ArrowRight02Icon, CheckmarkCircle02Icon, ChartLineData01Icon, InvoiceIcon, PackageIcon, ShieldIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
-import { Badge } from "@/components/ui/badge";
+import {
+  Add01Icon,
+  AiBrain01Icon,
+  ArrowRight02Icon,
+  Cancel01Icon,
+  ChartLineData01Icon,
+  CheckmarkCircle02Icon,
+  PackageIcon,
+  ShieldIcon,
+  Tick02Icon,
+  WhatsappIcon,
+} from "@hugeicons/core-free-icons";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { formatMoney } from "@/lib/utils/money";
+import { contactLabel } from "@/lib/utils/contact";
 import { useDashboardOverview } from "@/lib/query/dashboard";
-import { useApprovals } from "@/lib/query/approvals";
+import { useApprovals, useDecideApproval } from "@/lib/query/approvals";
+import { useConversations } from "@/lib/query/conversations";
 import { useInsight } from "@/lib/query/insights";
+import { useInventory } from "@/lib/query/inventory";
+import { useLedgerEntries } from "@/lib/query/books";
+import { approvalMeta, describeApproval, EmptyState, InitialsAvatar, PageShell, Panel, relativeTime, StatCard, StatusPill } from "@/components/dashboard/ui";
 
-const actionLabel: Record<string, { label: string; icon: typeof InvoiceIcon }> = {
-  send_message: { label: "WhatsApp reply", icon: WhatsappIcon },
-  send_invoice: { label: "Send invoice", icon: InvoiceIcon },
-  mark_invoice_paid: { label: "Mark invoice paid", icon: InvoiceIcon },
-  reorder: { label: "Create reorder", icon: PackageIcon },
-};
+const DAYS = 14;
+
+function useRevenueSeries() {
+  const { data: entries } = useLedgerEntries();
+  return useMemo(() => {
+    const days = Array.from({ length: DAYS }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (DAYS - 1 - i));
+      return { key: d.toISOString().slice(0, 10), label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }), income: 0 };
+    });
+    const byKey = new Map(days.map((d) => [d.key, d]));
+    for (const entry of entries ?? []) {
+      if (entry.entry_type !== "income") continue;
+      const day = byKey.get(entry.occurred_at.slice(0, 10));
+      if (day) day.income += entry.amount;
+    }
+    return days;
+  }, [entries]);
+}
+
+function RevenueTooltip({ active, payload, label, currency }: { active?: boolean; payload?: { value?: number | string }[]; label?: string; currency: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border/70 bg-popover px-3 py-2 text-xs shadow-md">
+      <p className="text-muted-foreground">{label}</p>
+      <p className="mt-1 font-mono font-semibold tabular-nums">{formatMoney(Number(payload[0]?.value ?? 0), currency)}</p>
+    </div>
+  );
+}
 
 export function OverviewView() {
   const { data: overview } = useDashboardOverview();
   const { data: approvals } = useApprovals();
+  const { data: conversations } = useConversations();
+  const { data: inventory } = useInventory();
+  const decide = useDecideApproval();
   const today = new Date().toISOString().slice(0, 10);
   const { data: insight } = useInsight(today);
+  const series = useRevenueSeries();
 
   const currency = overview?.business.currency ?? "LKR";
-  const metrics = [
-    { label: "Today's sales", value: overview ? formatMoney(overview.salesToday, currency) : "—", icon: ChartLineData01Icon, href: "/dashboard/books" },
-    { label: "Awaiting reply", value: overview?.conversations ?? "—", icon: WhatsappIcon, href: "/dashboard/inbox" },
-    { label: "Pending approvals", value: overview?.approvals ?? "—", icon: CheckmarkCircle02Icon, href: "/dashboard/approvals" },
-    { label: "Low-stock items", value: overview?.lowStock ?? "—", icon: PackageIcon, href: "/dashboard/inventory" },
-  ];
-  const pendingCount = approvals?.length ?? 0;
+  const pending = approvals ?? [];
+  const revenue14d = series.reduce((sum, d) => sum + d.income, 0);
+  const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <>
-      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border/70 bg-background/85 px-4 backdrop-blur-xl sm:px-8">
-        <div className="flex items-center gap-3 lg:hidden">
-          <span className="btn-purple flex size-9 items-center justify-center rounded-xl"><HugeiconsIcon icon={AiBrain01Icon} size={18} /></span>
-          <span className="text-sm font-semibold tracking-wide">Deskops AI</span>
-        </div>
-        <p className="hidden text-sm font-medium text-muted-foreground lg:block">{overview?.business.name ?? ""}</p>
-        <Link href="/dashboard/invoices/new"><Button className="btn-purple h-10 rounded-md border-0 px-4 text-sm">New invoice</Button></Link>
-      </header>
+    <PageShell
+      crumbs={["Overview"]}
+      actions={<Link href="/dashboard/invoices/new"><Button className="btn-purple h-9 rounded-lg border-0 px-4 text-sm"><HugeiconsIcon icon={Add01Icon} size={16} /> New invoice</Button></Link>}
+    >
+      <div className="mb-6">
+        <p className="font-mono text-[11px] tracking-[0.2em] text-primary uppercase">
+          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · {overview?.business.name ?? "…"}
+        </p>
+        <h1 className="mt-1.5 text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}.</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Your AI back office worked the desk — here&apos;s what needs a human.</p>
+      </div>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
-        <div>
-          <p className="font-mono text-xs tracking-[0.2em] text-primary uppercase">Overview</p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">Good to see you.</h1>
-          <p className="mt-3 text-muted-foreground">Your AI back office is handling the desk. Here&apos;s what needs you.</p>
-        </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Sales today" value={overview ? formatMoney(overview.salesToday, currency) : "—"} hint={`${formatMoney(revenue14d, currency)} last ${DAYS} days`} icon={ChartLineData01Icon} href="/dashboard/books" tone="brand" />
+        <StatCard label="Awaiting reply" value={overview?.conversations ?? "—"} hint="open conversations" icon={WhatsappIcon} href="/dashboard/inbox" />
+        <StatCard label="Approvals" value={overview?.approvals ?? "—"} hint="actions waiting on you" icon={CheckmarkCircle02Icon} href="/dashboard/approvals" />
+        <StatCard label="Low stock" value={overview?.lowStock ?? "—"} hint="items at reorder level" icon={PackageIcon} href="/dashboard/inventory" />
+      </section>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {metrics.map((metric) => (
-            <Link key={metric.label} href={metric.href} className="group">
-              <Card className="border-border/80 shadow-sm transition-colors group-hover:border-primary/40">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <p className="text-sm text-muted-foreground">{metric.label}</p>
-                    <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={metric.icon} size={18} strokeWidth={1.8} /></span>
-                  </div>
-                  <p className="mt-6 text-2xl font-semibold tracking-tight">{metric.value}</p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </section>
+      <section className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+        <div className="space-y-6">
+          <Panel title="Revenue" sub={`Income booked to the ledger, last ${DAYS} days`} action={<Link href="/dashboard/books/reports" className="text-xs font-medium text-primary hover:underline">Reports →</Link>}>
+            <div className="h-64 px-2 pt-4 pb-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={series} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.22} />
+                      <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="0" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} minTickGap={24} />
+                  <YAxis tickLine={false} axisLine={false} width={44} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))} />
+                  <Tooltip cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }} content={<RevenueTooltip currency={currency} />} />
+                  <Area type="monotone" dataKey="income" stroke="var(--chart-1)" strokeWidth={2} fill="url(#revFill)" activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
 
-        <section className="mt-7 grid gap-7 xl:grid-cols-[1.35fr_0.85fr]">
-          <Card className="overflow-hidden border-primary/20 shadow-[0_18px_50px_-26px_rgba(110,67,220,0.4)]">
-            <CardContent className="p-0">
-              <div className="flex items-center justify-between border-b border-border/70 bg-primary/5 px-5 py-4 sm:px-6">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-white"><HugeiconsIcon icon={CheckmarkCircle02Icon} size={20} /></span>
-                  <div>
-                    <p className="font-semibold">Waiting for approval</p>
-                    <p className="text-xs text-muted-foreground">{pendingCount > 0 ? `${pendingCount} item${pendingCount === 1 ? "" : "s"} need your go-ahead` : "You're all caught up"}</p>
-                  </div>
-                </div>
-                {pendingCount > 0 && <Badge className="rounded-md bg-primary/10 text-primary hover:bg-primary/10">{pendingCount}</Badge>}
-              </div>
-              <div className="divide-y divide-border/70">
-                {(approvals ?? []).slice(0, 4).map((item) => {
-                  const meta = actionLabel[item.action_type] ?? { label: item.action_type, icon: CheckmarkCircle02Icon };
-                  return (
-                    <div key={item.id} className="flex items-center gap-3 px-5 py-4 sm:px-6">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary"><HugeiconsIcon icon={meta.icon} size={17} /></span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{typeof item.payload.body === "string" ? item.payload.body : meta.label}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{meta.label} · {new Date(item.created_at).toLocaleTimeString()}</p>
-                      </div>
+          <Panel title="Waiting for approval" sub={pending.length > 0 ? `${pending.length} action${pending.length === 1 ? "" : "s"} held at the guardrail` : "Nothing is held — the agent is keeping up"} action={pending.length > 0 ? <StatusPill tone="warn" dot={false}>{pending.length} held</StatusPill> : undefined}>
+            <div className="divide-y divide-border/60">
+              {pending.slice(0, 5).map((item) => {
+                const meta = approvalMeta[item.action_type] ?? { label: item.action_type, icon: CheckmarkCircle02Icon };
+                return (
+                  <div key={item.id} className="flex items-center gap-3 px-5 py-3.5">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><HugeiconsIcon icon={meta.icon} size={16} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm">{describeApproval(item.payload)}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{meta.label} · {relativeTime(item.created_at)}</p>
                     </div>
-                  );
-                })}
-                {pendingCount === 0 && <div className="px-5 py-10 text-center text-sm text-muted-foreground sm:px-6">Nothing pending — the agent is keeping up.</div>}
-              </div>
-              <div className="border-t border-border/70 p-4 sm:px-6">
-                <Link href="/dashboard/approvals">
-                  <Button variant="outline" className="h-10 w-full rounded-md">View all approvals <HugeiconsIcon icon={ArrowRight02Icon} size={16} /></Button>
+                    <div className="flex shrink-0 gap-1.5">
+                      <Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, action: "approve" })} className="btn-purple h-8 rounded-lg border-0 px-3 text-xs"><HugeiconsIcon icon={Tick02Icon} size={14} /> Approve</Button>
+                      <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, action: "reject" })} className="h-8 rounded-lg px-2.5 text-xs" aria-label="Reject"><HugeiconsIcon icon={Cancel01Icon} size={14} /></Button>
+                    </div>
+                  </div>
+                );
+              })}
+              {pending.length === 0 && <EmptyState icon={CheckmarkCircle02Icon} title="All clear" hint="Money and message actions will queue here for your one-tap approval." className="py-10" />}
+              {pending.length > 5 && (
+                <Link href="/dashboard/approvals" className="flex items-center justify-center gap-1.5 px-5 py-3 text-sm font-medium text-primary hover:bg-primary/5">
+                  View all {pending.length} approvals <HugeiconsIcon icon={ArrowRight02Icon} size={15} />
                 </Link>
-              </div>
-            </CardContent>
-          </Card>
+              )}
+            </div>
+          </Panel>
+        </div>
 
-          <Card className="border-border/80">
-            <CardContent className="p-0">
-              <div className="flex items-center justify-between px-5 py-5 sm:px-6">
-                <div><p className="font-semibold">Today&apos;s insight</p><p className="mt-1 text-xs text-muted-foreground">Generated from your live books</p></div>
-                <HugeiconsIcon icon={AiBrain01Icon} size={22} className="text-primary" />
+        <div className="space-y-6">
+          <Panel className="border-primary/25 bg-linear-to-b from-primary/5 to-transparent">
+            <div className="p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Today&apos;s insight</p>
+                <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-white"><HugeiconsIcon icon={AiBrain01Icon} size={16} /></span>
               </div>
-              <div className="mx-5 rounded-xl bg-primary/6 p-5 sm:mx-6">
-                <p className="text-sm leading-6 text-foreground/85">{insight?.summary ?? "No insight generated yet for today — check back after your first sale."}</p>
-                <div className="mt-4 flex items-center gap-2 text-xs text-[#047857]"><HugeiconsIcon icon={ShieldIcon} size={15} /> Numbers verified against your books</div>
-              </div>
-              <div className="p-5 sm:px-6">
-                <Link href="/dashboard/books/reports">
-                  <Button variant="ghost" className="h-9 w-full justify-between rounded-md px-3 text-sm">View reports <HugeiconsIcon icon={ArrowRight02Icon} size={16} /></Button>
+              <p className="mt-3 text-sm leading-6 text-foreground/85">{insight?.summary ?? "No insight yet for today — the Books agent writes one after your first sale."}</p>
+              <p className="mt-4 flex items-center gap-1.5 text-xs text-[#047857]"><HugeiconsIcon icon={ShieldIcon} size={14} /> Numbers verified against your ledger</p>
+            </div>
+          </Panel>
+
+          <Panel title="Recent conversations" action={<Link href="/dashboard/inbox" className="text-xs font-medium text-primary hover:underline">Inbox →</Link>}>
+            <div className="divide-y divide-border/60">
+              {(conversations ?? []).slice(0, 5).map((c) => (
+                <Link key={c.id} href={`/dashboard/inbox/${c.id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
+                  <InitialsAvatar name={contactLabel(c.customers)} className="size-8 text-[10px]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{contactLabel(c.customers)}</p>
+                    <p className="text-xs text-muted-foreground">{relativeTime(c.last_message_at)}</p>
+                  </div>
+                  <StatusPill tone={c.status === "open" ? "brand" : "neutral"} dot={false}>{c.status}</StatusPill>
                 </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      </main>
-    </>
+              ))}
+              {(conversations ?? []).length === 0 && <EmptyState icon={WhatsappIcon} title="No conversations yet" hint="Customer WhatsApp messages will land here." className="py-8" />}
+            </div>
+          </Panel>
+
+          <Panel title="Low stock" action={<Link href="/dashboard/inventory" className="text-xs font-medium text-primary hover:underline">Inventory →</Link>}>
+            <div className="divide-y divide-border/60">
+              {(inventory?.lowStock ?? []).slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">reorder at {item.reorder_level}</p>
+                  </div>
+                  <StatusPill tone={item.stock_qty === 0 ? "bad" : "warn"} dot={false}>{item.stock_qty} left</StatusPill>
+                </div>
+              ))}
+              {(inventory?.lowStock ?? []).length === 0 && <EmptyState icon={PackageIcon} title="Stock is healthy" hint="Items at or below their reorder level will show here." className="py-8" />}
+            </div>
+          </Panel>
+        </div>
+      </section>
+    </PageShell>
   );
 }

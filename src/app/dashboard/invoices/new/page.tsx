@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
+import { PageIntro, PageShell } from "@/components/dashboard/ui";
 import { useCreateInvoice } from "@/lib/query/invoices";
 import { useCustomers } from "@/lib/query/customers";
 import { useProducts } from "@/lib/query/products";
@@ -50,12 +50,10 @@ export default function NewInvoicePage() {
   const total = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
 
   return (
-    <>
-      <PageHeaderBar title="New invoice" backHref="/dashboard/invoices" />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle eyebrow="Create draft" title="New invoice" description="Totals are computed from your catalog — never typed in by hand." />
+    <PageShell crumbs={[{ label: "Invoices", href: "/dashboard/invoices" }, "New"]} width="max-w-3xl">
+      <PageIntro eyebrow="Create draft" title="New invoice" description="Totals are computed from your catalog — never typed in by hand." />
 
-        <Card className="mt-8 border-border/80">
+        <Card className="border-border/80">
           <CardContent className="space-y-5 p-6">
             <div className="space-y-1.5">
               <Label>Customer (optional)</Label>
@@ -100,7 +98,6 @@ export default function NewInvoicePage() {
             <Button onClick={submit} disabled={createInvoice.isPending} className="btn-purple border-0">{createInvoice.isPending ? "Creating…" : "Create draft invoice"}</Button>
           </CardContent>
         </Card>
-      </main>
-    </>
+    </PageShell>
   );
 }

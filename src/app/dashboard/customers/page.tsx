@@ -3,22 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { contactLabel } from "@/lib/utils/contact";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
+import { contactLabel } from "@/lib/utils/contact";
 import { useCreateCustomer, useCustomers } from "@/lib/query/customers";
+import { EmptyState, InitialsAvatar, PageIntro, PageShell, Panel, relativeTime, SearchField } from "@/components/dashboard/ui";
 
 export default function CustomersPage() {
   const { data: customers, isLoading } = useCustomers();
   const createCustomer = useCreateCustomer();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const filtered = (customers ?? []).filter((c) => `${c.name ?? ""} ${c.whatsapp_number} ${c.email ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   async function submit(formData: FormData) {
     setError(null);
@@ -36,35 +37,35 @@ export default function CustomersPage() {
   }
 
   return (
-    <>
-      <PageHeaderBar title="Customers" />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle
-          eyebrow={`${customers?.length ?? 0} customers`}
-          title="Customers"
-          description="Every customer conversation and order history, all together."
-          action={<Button className="btn-purple h-10 rounded-md border-0 px-4" onClick={() => setOpen(true)}><HugeiconsIcon icon={Add01Icon} size={17} /> Add customer</Button>}
-        />
+    <PageShell
+      crumbs={["Customers"]}
+      actions={<Button className="btn-purple h-9 rounded-lg border-0 px-4 text-sm" onClick={() => setOpen(true)}><HugeiconsIcon icon={Add01Icon} size={16} /> Add customer</Button>}
+    >
+      <PageIntro eyebrow={`${customers?.length ?? 0} customers`} title="Customers" description="Every conversation, quote, and order history in one profile — the context your agents ground on." />
 
-        <Card className="mt-8 border-border/80">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>WhatsApp</TableHead><TableHead>Email</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {isLoading && <TableRow><TableCell colSpan={3} className="py-10 text-center text-muted-foreground">Loading…</TableCell></TableRow>}
-                {!isLoading && customers?.length === 0 && <TableRow><TableCell colSpan={3} className="py-10 text-center text-muted-foreground">No customers yet.</TableCell></TableRow>}
-                {customers?.map((customer) => (
-                  <TableRow key={customer.id}>
-                    <TableCell className="font-medium"><Link href={`/dashboard/customers/${customer.id}`} className="hover:text-primary">{customer.name ?? "Unnamed"}</Link></TableCell>
-                    <TableCell className="text-muted-foreground">{contactLabel({ whatsapp_number: customer.whatsapp_number })}</TableCell>
-                    <TableCell className="text-muted-foreground">{customer.email ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </main>
+      <Panel title="Directory" action={<SearchField value={search} onChange={setSearch} placeholder="Search name, number, email…" className="w-56 sm:w-72" />}>
+        <div className="divide-y divide-border/60">
+          {isLoading && <p className="p-6 text-center text-sm text-muted-foreground">Loading…</p>}
+          {!isLoading && filtered.length === 0 && (
+            <EmptyState
+              icon={UserGroupIcon}
+              title={search ? "No matches" : "No customers yet"}
+              hint={search ? "Try a different search." : "Customers are created automatically when someone messages you on WhatsApp."}
+              action={!search ? <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Add customer</Button> : undefined}
+            />
+          )}
+          {filtered.map((customer) => (
+            <Link key={customer.id} href={`/dashboard/customers/${customer.id}`} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40">
+              <InitialsAvatar name={contactLabel(customer)} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{customer.name ?? contactLabel(customer)}</p>
+                <p className="truncate text-xs text-muted-foreground">{contactLabel({ whatsapp_number: customer.whatsapp_number })}{customer.email ? ` · ${customer.email}` : ""}</p>
+              </div>
+              <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">added {relativeTime(customer.created_at)}</span>
+            </Link>
+          ))}
+        </div>
+      </Panel>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -79,6 +80,6 @@ export default function CustomersPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </PageShell>
   );
 }

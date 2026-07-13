@@ -19,7 +19,7 @@ async function json<T>(response: Response): Promise<T> {
 }
 
 export function useApprovals() {
-  return useQuery({ queryKey: qk.approvals, queryFn: () => fetch("/api/approvals").then((r) => json<Approval[]>(r)), refetchInterval: 15_000 });
+  return useQuery({ queryKey: qk.approvals, queryFn: () => fetch("/api/approvals").then((r) => json<Approval[]>(r)) });
 }
 
 export function useDecideApproval() {

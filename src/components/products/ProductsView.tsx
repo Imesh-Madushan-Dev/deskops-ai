@@ -1,66 +1,98 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon } from "@hugeicons/core-free-icons";
-import { Badge } from "@/components/ui/badge";
+import { Add01Icon, DollarCircleIcon, PackageIcon, TagIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
 import { useProducts } from "@/lib/query/products";
 import { formatMoney } from "@/lib/utils/money";
 import { useDashboardOverview } from "@/lib/query/dashboard";
+import { cn } from "@/lib/utils";
+import { EmptyState, PageIntro, PageShell, Panel, SearchField, StatCard, StatusPill } from "@/components/dashboard/ui";
 import { ProductFormDialog } from "./ProductFormDialog";
 
 export function ProductsView() {
   const { data: products, isLoading } = useProducts();
   const { data: overview } = useDashboardOverview();
-  const [open, setOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(searchParams.get("new") === "1");
+  const [search, setSearch] = useState("");
   const currency = overview?.business.currency ?? "LKR";
 
-  return (
-    <>
-      <PageHeaderBar title="Products" />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle
-          eyebrow={`${products?.length ?? 0} products`}
-          title="Product catalog"
-          description="Prices, stock, and supplier details are always ready for your agents."
-          action={<Button className="btn-purple h-10 rounded-md border-0 px-4" onClick={() => setOpen(true)}><HugeiconsIcon icon={Add01Icon} size={17} /> Add product</Button>}
-        />
+  const stats = useMemo(() => {
+    const list = products ?? [];
+    return {
+      total: list.length,
+      active: list.filter((p) => p.is_active).length,
+      low: list.filter((p) => p.stock_qty <= p.reorder_level).length,
+      value: list.reduce((sum, p) => sum + p.price * p.stock_qty, 0),
+      categories: new Set(list.map((p) => p.product_categories?.name).filter(Boolean)).size,
+    };
+  }, [products]);
 
-        <Card className="mt-8 overflow-hidden border-border/80">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Status</TableHead>
+  const filtered = (products ?? []).filter((p) => `${p.name} ${p.sku ?? ""} ${p.product_categories?.name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <PageShell
+      crumbs={["Products"]}
+      actions={<Button className="btn-purple h-9 rounded-lg border-0 px-4 text-sm" onClick={() => setOpen(true)}><HugeiconsIcon icon={Add01Icon} size={16} /> Add product</Button>}
+    >
+      <PageIntro eyebrow="Catalog" title="Products" description="Prices, stock, and supplier details — the ground truth your agents quote from." />
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Products" value={stats.total} hint={`${stats.active} active`} icon={PackageIcon} />
+        <StatCard label="Stock value" value={formatMoney(stats.value, currency)} hint="price × on-hand qty" icon={DollarCircleIcon} tone="brand" />
+        <StatCard label="Low stock" value={stats.low} hint="at or below reorder level" icon={PackageIcon} href="/dashboard/inventory" />
+        <StatCard label="Categories" value={stats.categories} hint="in use" icon={TagIcon} />
+      </section>
+
+      <Panel className="mt-6" title="Catalog" action={<SearchField value={search} onChange={setSearch} placeholder="Search name, SKU, category…" className="w-56 sm:w-72" />}>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Product</TableHead>
+              <TableHead className="hidden sm:table-cell">SKU</TableHead>
+              <TableHead className="hidden md:table-cell">Category</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+              <TableHead>Stock</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Loading…</TableCell></TableRow>}
+            {!isLoading && filtered.length === 0 && (
+              <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="p-0">
+                <EmptyState icon={PackageIcon} title={search ? "No matches" : "No products yet"} hint={search ? "Try a different search." : "Add your first product so the agents can quote real prices."} action={!search ? <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Add product</Button> : undefined} />
+              </TableCell></TableRow>
+            )}
+            {filtered.map((product) => {
+              const low = product.stock_qty <= product.reorder_level;
+              const pct = Math.min(100, Math.round((product.stock_qty / Math.max(product.reorder_level * 2, 1)) * 100));
+              return (
+                <TableRow key={product.id}>
+                  <TableCell className="font-medium"><Link href={`/dashboard/products/${product.id}`} className="hover:text-primary">{product.name}</Link></TableCell>
+                  <TableCell className="hidden font-mono text-xs text-muted-foreground sm:table-cell">{product.sku ?? "—"}</TableCell>
+                  <TableCell className="hidden text-muted-foreground md:table-cell">{product.product_categories?.name ?? "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(product.price, currency)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("font-mono text-sm tabular-nums", low && "font-semibold text-destructive")}>{product.stock_qty}</span>
+                      <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                        <span className={cn("block h-full rounded-full", low ? "bg-destructive" : "bg-chart-1")} style={{ width: `${pct}%` }} />
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell><StatusPill tone={product.is_active ? "ok" : "neutral"} dot={false}>{product.is_active ? "Active" : "Archived"}</StatusPill></TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading && <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Loading…</TableCell></TableRow>}
-                {!isLoading && products?.length === 0 && <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">No products yet — add your first one.</TableCell></TableRow>}
-                {products?.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium"><Link href={`/dashboard/products/${product.id}`} className="hover:text-primary">{product.name}</Link></TableCell>
-                    <TableCell className="text-muted-foreground">{product.sku ?? "—"}</TableCell>
-                    <TableCell>{formatMoney(product.price, currency)}</TableCell>
-                    <TableCell className={product.stock_qty <= product.reorder_level ? "text-destructive" : ""}>{product.stock_qty}</TableCell>
-                    <TableCell><Badge variant={product.is_active ? "secondary" : "outline"}>{product.is_active ? "Active" : "Archived"}</Badge></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </main>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Panel>
       <ProductFormDialog open={open} onOpenChange={setOpen} />
-    </>
+    </PageShell>
   );
 }

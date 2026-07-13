@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
+import { PageIntro, PageShell } from "@/components/dashboard/ui";
 import { useArchiveProduct, useProduct, useUpdateProduct } from "@/lib/query/products";
 import { useAdjustStock } from "@/lib/query/inventory";
 import { useDashboardOverview } from "@/lib/query/dashboard";
@@ -41,10 +41,8 @@ export function ProductDetailView({ productId }: { productId: string }) {
   if (!product) return <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">Product not found.</main>;
 
   return (
-    <>
-      <PageHeaderBar title="Product" backHref="/dashboard/products" />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle eyebrow={product.sku ?? "No SKU"} title={product.name} description="Prices and reorder rules used by your agents when quoting customers." />
+    <PageShell crumbs={[{ label: "Products", href: "/dashboard/products" }, product.name]} width="max-w-3xl">
+      <PageIntro eyebrow={product.sku ?? "No SKU"} title={product.name} description="Prices and reorder rules used by your agents when quoting customers." />
 
         <Card className="mt-8 border-border/80">
           <CardContent className="p-6">
@@ -84,7 +82,6 @@ export function ProductDetailView({ productId }: { productId: string }) {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </>
+    </PageShell>
   );
 }

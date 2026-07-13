@@ -14,11 +14,11 @@ async function json<T>(response: Response): Promise<T> {
 }
 
 export function useConversations() {
-  return useQuery({ queryKey: qk.conversations, queryFn: () => fetch("/api/conversations").then((r) => json<Conversation[]>(r)), refetchInterval: 15_000 });
+  return useQuery({ queryKey: qk.conversations, queryFn: () => fetch("/api/conversations").then((r) => json<Conversation[]>(r)) });
 }
 
 export function useConversation(id: string) {
-  return useQuery({ queryKey: qk.conversation(id), queryFn: () => fetch(`/api/conversations/${id}`).then((r) => json<ConversationDetail>(r)), enabled: Boolean(id), refetchInterval: 8_000 });
+  return useQuery({ queryKey: qk.conversation(id), queryFn: () => fetch(`/api/conversations/${id}`).then((r) => json<ConversationDetail>(r)), enabled: Boolean(id) });
 }
 
 export function useSendOwnerMessage(id: string) {

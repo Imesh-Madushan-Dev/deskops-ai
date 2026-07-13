@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
+import { PageIntro, PageShell } from "@/components/dashboard/ui";
 import { useInvoice, useInvoiceAction } from "@/lib/query/invoices";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { formatMoney } from "@/lib/utils/money";
@@ -32,10 +32,8 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
   if (!invoice) return <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">Invoice not found.</main>;
 
   return (
-    <>
-      <PageHeaderBar title="Invoice" backHref="/dashboard/invoices" />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle
+    <PageShell crumbs={[{ label: "Invoices", href: "/dashboard/invoices" }, invoice.number]} width="max-w-3xl">
+      <PageIntro
           eyebrow={invoice.customers?.name ?? invoice.customers?.whatsapp_number ?? "No customer"}
           title={invoice.number}
           description="Owner-initiated actions here are the human-in-the-loop step — no separate approval needed."
@@ -72,7 +70,6 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
           {(invoice.status === "draft" || invoice.status === "sent") && <Button onClick={() => run("record_sale")} disabled={action.isPending} className="btn-purple border-0">Record payment</Button>}
           {invoice.status !== "paid" && invoice.status !== "void" && <Button variant="outline" onClick={() => run("void")} disabled={action.isPending}>Void invoice</Button>}
         </div>
-      </main>
-    </>
+    </PageShell>
   );
 }

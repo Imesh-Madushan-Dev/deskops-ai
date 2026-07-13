@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeaderBar, PageTitle } from "@/components/dashboard/PageHeader";
+import { PageIntro, PageShell } from "@/components/dashboard/ui";
 import { useCreateProduct } from "@/lib/query/products";
 
 export default function NewProductPage() {
@@ -35,11 +35,9 @@ export default function NewProductPage() {
   }
 
   return (
-    <>
-      <PageHeaderBar title="New product" backHref="/dashboard/products" />
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:px-8 sm:py-10">
-        <PageTitle eyebrow="Create draft" title="Add a product" description="Prices and stock feed straight into your agents' quotes." />
-        <Card className="mt-8 border-border/80">
+    <PageShell crumbs={[{ label: "Products", href: "/dashboard/products" }, "New"]} width="max-w-2xl">
+      <PageIntro eyebrow="Create draft" title="Add a product" description="Prices and stock feed straight into your agents' quotes." />
+        <Card className="border-border/80">
           <CardContent className="p-6">
             <form action={submit} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -63,7 +61,6 @@ export default function NewProductPage() {
             </form>
           </CardContent>
         </Card>
-      </main>
-    </>
+    </PageShell>
   );
 }
