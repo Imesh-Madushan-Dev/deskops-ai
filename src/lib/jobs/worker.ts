@@ -8,7 +8,7 @@ import { getBooksSummary } from "@/lib/db/ledger";
 import { createApproval } from "@/lib/db/approvals";
 import { enqueueJob } from "@/lib/jobs/enqueue";
 import { sendWhatsappMessage } from "@/lib/waha/client";
-import { isAutoReplyEnabled } from "@/lib/db/settings";
+import { readAutoReply, readAutoInvoice } from "@/lib/db/settings";
 
 const BATCH_SIZE = 10;
 
@@ -73,40 +73,65 @@ async function processJob(job: { business_id: string; job_type: string; payload:
 
     // Give the agent the running conversation + who it's talking to, so it remembers context
     // across messages and never asks an existing customer for their own number.
-    const [{ data: conv }, { data: msgs }] = await Promise.all([
+    const [{ data: conv }, { data: msgs }, { data: biz }] = await Promise.all([
       supabase.from("conversations").select("customer_id, customers(name, whatsapp_number)").eq("id", payload.conversationId).single(),
       supabase.from("messages").select("direction, body").eq("conversation_id", payload.conversationId).order("created_at").limit(30),
+      supabase.from("businesses").select("whatsapp_session, settings").eq("id", job.business_id).single(),
     ]);
+    const session = biz?.whatsapp_session ?? "default";
+    const autoReply = readAutoReply(biz?.settings);
+    const autoInvoice = readAutoInvoice(biz?.settings);
+
     // Drop the last row (the message we're answering — runOrchestrator appends it itself).
     const history: ModelMessage[] = (msgs ?? []).slice(0, -1).map((m) => ({ role: m.direction === "inbound" ? "user" : "assistant", content: m.body }));
     const whatsappStyle = [
       "You are replying to a customer on WhatsApp. Write like a warm, real shop assistant — not a robot.",
       "Formatting (WhatsApp, NOT markdown): use *single asterisks* for bold — never **double**. Use _underscores_ for italics.",
       "Keep messages short. Break them into a few short lines with a blank line between points, so it reads clean on a phone — never one dense block.",
-      "Mirror the customer's language: if they write Sinhala or mix Sinhala with English (Singlish), reply the same warm, casual way, using the English words Sri Lankans naturally use. Stay friendly and human.",
+      "Mirror the customer's language: if they write සිංහල or mix සිංහල with English (Singlish), reply the same warm, casual way, using the English words Sri Lankans naturally use. Stay friendly and human.",
+      autoInvoice
+        ? "When you draft an invoice it is sent to the customer right away — tell them here is their quote."
+        : "When you draft an invoice it must be confirmed by the shop owner first — so tell the customer their quote is being prepared and will be confirmed in a few minutes.",
     ].join("\n");
     const contextNote = conv?.customer_id
       ? `${whatsappStyle}\n\nYou are chatting with an existing customer "${contactLabel(conv.customers)}" (customer id ${conv.customer_id}). Never ask them for their WhatsApp number — use this customer id directly for any invoice.`
       : whatsappStyle;
 
     const result = await runOrchestrator({ ...payload, history, contextNote, businessOverride: { businessId: job.business_id } });
-    const [text, steps] = await Promise.all([result.text, result.steps]);
+    // The agent's conversational reply (acknowledgment) always goes to the customer so they're never
+    // left hanging. The invoice it drafts is queued separately and, unless invoices are automated,
+    // its quote is sent only after the owner approves it — money still gates by default.
+    const reply = (await result.text).trim();
+    if (reply) {
+      if (autoReply) {
+        const send = await sendWhatsappMessage(session, payload.chatId, reply);
+        await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: reply, provider_message_id: send.sent ? send.providerMessageId : null });
+        await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
+      } else {
+        await createApproval(
+          { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: reply } },
+          { businessId: job.business_id },
+        );
+      }
+    }
 
-    // An invoice draft always gates for owner approval (money) — don't also auto-send the text.
-    const invoiceQueued = steps.some((step) => step.toolCalls.some((call) => call.toolName === "draftAndQueueInvoice"));
-    const reply = text.trim();
-    if (invoiceQueued || !reply) return;
-
-    if (await isAutoReplyEnabled(job.business_id)) {
-      const { data: biz } = await supabase.from("businesses").select("whatsapp_session").eq("id", job.business_id).single();
-      const send = await sendWhatsappMessage(biz?.whatsapp_session ?? "default", payload.chatId, reply);
-      await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: reply, provider_message_id: send.sent ? send.providerMessageId : null });
-      await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
-    } else {
-      await createApproval(
-        { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: reply } },
-        { businessId: job.business_id },
-      );
+    // Auto-send invoices the agent just drafted, if the owner enabled it. Otherwise they stay
+    // pending in Approvals (the acknowledgment above already told the customer to wait).
+    if (autoInvoice) {
+      const { data: pending } = await supabase
+        .from("approvals")
+        .select("id, payload")
+        .eq("business_id", job.business_id)
+        .eq("conversation_id", payload.conversationId)
+        .eq("action_type", "send_invoice")
+        .eq("status", "pending");
+      for (const appr of pending ?? []) {
+        const p = appr.payload as { chatId: string; invoiceId: string; body: string };
+        await supabase.from("invoices").update({ status: "sent", issued_at: new Date().toISOString() }).eq("id", p.invoiceId).eq("business_id", job.business_id).eq("status", "draft");
+        const send = await sendWhatsappMessage(session, p.chatId, p.body);
+        await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: p.body, provider_message_id: send.sent ? send.providerMessageId : null });
+        await supabase.from("approvals").update({ status: "executed" }).eq("id", appr.id);
+      }
     }
     return;
   }

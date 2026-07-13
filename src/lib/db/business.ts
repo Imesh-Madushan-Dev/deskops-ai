@@ -13,6 +13,7 @@ export const businessInputSchema = z.object({
   aiProvider: z.enum(Object.keys(PROVIDER_CATALOG) as [string, ...string[]]).optional(),
   aiModel: z.string().trim().max(120).optional(),
   autoApproveReplies: z.boolean().optional(),
+  autoApproveInvoices: z.boolean().optional(),
 });
 export type BusinessInput = z.infer<typeof businessInputSchema>;
 
@@ -20,7 +21,7 @@ export async function updateBusiness(input: BusinessInput) {
   const { supabase, business } = await getCurrentBusiness();
 
   let settingsUpdate: Json | undefined;
-  if (input.aiProvider !== undefined || input.autoApproveReplies !== undefined) {
+  if (input.aiProvider !== undefined || input.autoApproveReplies !== undefined || input.autoApproveInvoices !== undefined) {
     const current = (typeof business.settings === "object" && business.settings !== null && !Array.isArray(business.settings) ? business.settings : {}) as Record<string, Json>;
     settingsUpdate = { ...current };
 
@@ -30,9 +31,11 @@ export async function updateBusiness(input: BusinessInput) {
       const model = input.aiModel && models.includes(input.aiModel) ? input.aiModel : models[0];
       settingsUpdate.ai = { provider: input.aiProvider, model };
     }
-    if (input.autoApproveReplies !== undefined) {
+    if (input.autoApproveReplies !== undefined || input.autoApproveInvoices !== undefined) {
       const automation = (typeof current.automation === "object" && current.automation !== null && !Array.isArray(current.automation) ? current.automation : {}) as Record<string, Json>;
-      settingsUpdate.automation = { ...automation, autoApproveReplies: input.autoApproveReplies };
+      if (input.autoApproveReplies !== undefined) automation.autoApproveReplies = input.autoApproveReplies;
+      if (input.autoApproveInvoices !== undefined) automation.autoApproveInvoices = input.autoApproveInvoices;
+      settingsUpdate.automation = automation;
     }
   }
 

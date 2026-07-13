@@ -1,5 +1,5 @@
 import { getCurrentBusiness } from "@/lib/db/auth";
-import { readAutoReply } from "@/lib/db/settings";
+import { readAutoReply, readAutoInvoice } from "@/lib/db/settings";
 
 export async function getDashboardOverview() {
   const { supabase, business } = await getCurrentBusiness();
@@ -13,7 +13,7 @@ export async function getDashboardOverview() {
   for (const result of [conversations, approvals, products, invoices]) if (result.error) throw result.error;
   const salesToday = (invoices.data ?? []).reduce((sum, invoice) => sum + Number(invoice.total), 0);
   return {
-    business: { ...business, whatsappSession: business.whatsapp_session, whatsappConnected: Boolean(business.whatsapp_session), autoApproveReplies: readAutoReply(business.settings) },
+    business: { ...business, whatsappSession: business.whatsapp_session, whatsappConnected: Boolean(business.whatsapp_session), autoApproveReplies: readAutoReply(business.settings), autoApproveInvoices: readAutoInvoice(business.settings) },
     conversations: conversations.count ?? 0,
     approvals: approvals.count ?? 0,
     lowStock: products.count ?? 0,

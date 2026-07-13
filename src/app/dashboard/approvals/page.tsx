@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@hugeicons/react";
-import { CheckmarkCircle02Icon, Cancel01Icon, InvoiceIcon, PackageIcon, WhatsappIcon, AiBrain01Icon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle02Icon, Cancel01Icon, InvoiceIcon, PackageIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +25,7 @@ export default function ApprovalsPage() {
   const decide = useDecideApproval();
   const updateBusiness = useUpdateBusiness();
   const autoReply = overview?.business.autoApproveReplies ?? false;
+  const autoInvoice = overview?.business.autoApproveInvoices ?? false;
 
   return (
     <>
@@ -33,18 +34,33 @@ export default function ApprovalsPage() {
         <PageTitle eyebrow={`${approvals?.length ?? 0} waiting for you`} title="Approvals" description="Nothing leaves Deskops until you give the go-ahead." />
 
         <Card className="mt-8 border-primary/20 bg-primary/5">
-          <CardContent className="flex items-center gap-4 p-5">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={AiBrain01Icon} size={20} /></span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Auto-reply to customer messages</p>
-              <p className="text-xs text-muted-foreground">When on, the agent replies to customers automatically. Invoices and money actions always wait for you.</p>
+          <CardContent className="divide-y divide-border/60 p-0">
+            <div className="flex items-center gap-4 p-5">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={WhatsappIcon} size={20} /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Auto-reply to customer messages</p>
+                <p className="text-xs text-muted-foreground">The agent answers customers automatically, without waiting for you.</p>
+              </div>
+              <Switch
+                checked={autoReply}
+                disabled={updateBusiness.isPending || !overview}
+                onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveReplies: checked })}
+                aria-label="Toggle auto-reply"
+              />
             </div>
-            <Switch
-              checked={autoReply}
-              disabled={updateBusiness.isPending || !overview}
-              onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveReplies: checked })}
-              aria-label="Toggle auto-reply"
-            />
+            <div className="flex items-center gap-4 p-5">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><HugeiconsIcon icon={InvoiceIcon} size={20} /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Auto-send invoices</p>
+                <p className="text-xs text-muted-foreground">When off, invoices the agent drafts wait here for your approval before they reach the customer.</p>
+              </div>
+              <Switch
+                checked={autoInvoice}
+                disabled={updateBusiness.isPending || !overview}
+                onCheckedChange={(checked) => updateBusiness.mutate({ autoApproveInvoices: checked })}
+                aria-label="Toggle auto-send invoices"
+              />
+            </div>
           </CardContent>
         </Card>
 
