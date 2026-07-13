@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, CheckmarkCircle02Icon, InvoiceIcon, ShieldIcon, Tick02Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ export default function ApprovalsPage() {
   const autoReply = overview?.business.autoApproveReplies ?? false;
   const autoInvoice = overview?.business.autoApproveInvoices ?? false;
   const pending = approvals ?? [];
+  // Captured once per mount — precise enough for a 4-hour expiry warning.
+  const [now] = useState(() => Date.now());
 
   return (
     <PageShell crumbs={["Approvals"]} width="max-w-4xl">
@@ -67,7 +70,7 @@ export default function ApprovalsPage() {
         )}
         {pending.map((approval) => {
           const meta = approvalMeta[approval.action_type] ?? { label: approval.action_type, icon: CheckmarkCircle02Icon };
-          const expiresSoon = new Date(approval.expires_at).getTime() - Date.now() < 4 * 3600_000;
+          const expiresSoon = new Date(approval.expires_at).getTime() - now < 4 * 3600_000;
           return (
             <Panel key={approval.id}>
               <div className="p-5">
