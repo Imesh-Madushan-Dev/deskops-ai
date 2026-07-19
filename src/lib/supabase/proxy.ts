@@ -13,6 +13,18 @@ export async function updateSession(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getClaims();
+  const { data } = await supabase.auth.getClaims();
+  const isAuthed = Boolean(data?.claims.sub);
+  const { pathname } = request.nextUrl;
+
+  const isAuthPage = pathname === "/login" || pathname === "/signup";
+  const isProtected = pathname.startsWith("/dashboard") || pathname === "/onboarding";
+
+  const redirectTo = isAuthed && isAuthPage ? "/dashboard" : !isAuthed && isProtected ? "/login" : null;
+  if (redirectTo) {
+    const redirect = NextResponse.redirect(new URL(redirectTo, request.url));
+    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
+  }
   return response;
 }

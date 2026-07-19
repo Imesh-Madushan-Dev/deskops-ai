@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { qk } from "./keys";
 
 export type Conversation = { id: string; status: "open" | "snoozed" | "closed"; last_message_at: string | null; customers: { name: string | null; whatsapp_number: string } | null };
-export type Message = { id: string; direction: "inbound" | "outbound"; sender: "customer" | "agent" | "owner"; body: string; created_at: string };
+export type Message = { id: string; direction: "inbound" | "outbound"; sender: "customer" | "agent" | "owner"; body: string; media_url: string | null; created_at: string };
 export type ConversationDetail = Conversation & { messages: Message[] };
 
 async function json<T>(response: Response): Promise<T> {

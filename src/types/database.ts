@@ -600,6 +600,7 @@ export type Database = {
           created_at: string
           direction: string
           id: string
+          media_url: string | null
           provider_message_id: string | null
           sender: string
         }
@@ -610,6 +611,7 @@ export type Database = {
           created_at?: string
           direction: string
           id?: string
+          media_url?: string | null
           provider_message_id?: string | null
           sender: string
         }
@@ -620,6 +622,7 @@ export type Database = {
           created_at?: string
           direction?: string
           id?: string
+          media_url?: string | null
           provider_message_id?: string | null
           sender?: string
         }
@@ -762,6 +765,7 @@ export type Database = {
           cost: number | null
           created_at: string
           id: string
+          image_url: string | null
           is_active: boolean
           name: string
           price: number
@@ -777,6 +781,7 @@ export type Database = {
           cost?: number | null
           created_at?: string
           id?: string
+          image_url?: string | null
           is_active?: boolean
           name: string
           price: number
@@ -792,6 +797,7 @@ export type Database = {
           cost?: number | null
           created_at?: string
           id?: string
+          image_url?: string | null
           is_active?: boolean
           name?: string
           price?: number

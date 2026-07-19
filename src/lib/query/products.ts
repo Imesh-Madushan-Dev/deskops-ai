@@ -13,6 +13,7 @@ export type Product = {
   stock_qty: number;
   reorder_level: number;
   is_active: boolean;
+  image_url: string | null;
   product_categories: { name: string } | null;
   suppliers: { name: string } | null;
 };

@@ -4,6 +4,7 @@ import { getCurrentBusiness } from "@/lib/db/auth";
 import { createInvoice } from "@/lib/db/invoices";
 import { createApproval } from "@/lib/db/approvals";
 import { formatMoney } from "@/lib/utils/money";
+import { sendWhatsappImage } from "@/lib/waha/client";
 import type { ConversationToolContext } from "./context";
 
 export function createSalesTools(context: ConversationToolContext) {
@@ -43,7 +44,39 @@ export function createSalesTools(context: ConversationToolContext) {
     },
   });
 
+  const sendProductImage = tool({
+    description:
+      "Send a product's photo to the customer as a WhatsApp image message. ONLY use when the conversation is about ONE specific product AND the customer asked to see it (or said yes to your offer). Never send images unprompted or for whole lists.",
+    inputSchema: z.object({
+      productId: z.string().uuid().describe("The product id from checkStock"),
+      caption: z.string().max(500).optional().describe("Short caption in the customer's language, e.g. name and price"),
+    }),
+    execute: async ({ productId, caption }) => {
+      const { supabase, business } = await getCurrentBusiness(context.businessOverride);
+      const { data: product, error } = await supabase
+        .from("products")
+        .select("name, price, image_url")
+        .eq("business_id", business.id)
+        .eq("id", productId)
+        .single();
+      if (error) throw error;
+      if (!product.image_url) return { sent: false, note: "This product has no image — tell the customer a photo isn't available right now." };
+
+      const send = await sendWhatsappImage(business.whatsapp_session ?? "default", context.chatId, product.image_url, caption ?? product.name);
+      await supabase.from("messages").insert({
+        business_id: business.id,
+        conversation_id: context.conversationId,
+        direction: "outbound",
+        sender: "agent",
+        body: caption ?? product.name,
+        media_url: product.image_url,
+        provider_message_id: send.sent ? send.providerMessageId : null,
+      });
+      return { sent: send.sent, note: send.sent ? "Image sent. Don't repeat the image link in your text reply." : "WhatsApp is not connected — image not sent." };
+    },
+  });
+
   // Plain conversational replies are not a tool — the agent just writes them as its answer, and the
   // worker either auto-sends (automation on) or queues them for approval. Only money actions gate here.
-  return { draftAndQueueInvoice };
+  return { draftAndQueueInvoice, sendProductImage };
 }

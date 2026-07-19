@@ -5,19 +5,24 @@ import type { ToolContext } from "./context";
 
 export function createInventoryTools(context: ToolContext) {
   const checkStock = tool({
-    description: "Check stock quantity and unit price for a product by name or SKU.",
-    inputSchema: z.object({ query: z.string().describe("Product name or SKU to search for") }),
+    description:
+      "Look up products with stock quantity, unit price, and image. Omit `query` to list ALL products (use this when the customer asks what products are available).",
+    inputSchema: z.object({
+      query: z.string().optional().describe("Product name or SKU to search for. Omit to list every active product."),
+    }),
     execute: async ({ query }) => {
       const { supabase, business } = await getCurrentBusiness(context.businessOverride);
-      // Strip PostgREST filter syntax characters — query text can come from a customer's message.
-      const safe = query.replace(/[,()]/g, " ").trim();
-      const { data, error } = await supabase
+      let builder = supabase
         .from("products")
-        .select("name, sku, price, stock_qty, reorder_level")
+        .select("id, name, sku, price, stock_qty, reorder_level, image_url")
         .eq("business_id", business.id)
         .eq("is_active", true)
-        .or(`name.ilike.%${safe}%,sku.ilike.%${safe}%`)
-        .limit(5);
+        .order("name");
+      // Strip PostgREST filter syntax characters — query text can come from a customer's message.
+      const safe = query?.replace(/[,()]/g, " ").trim();
+      if (safe) builder = builder.or(`name.ilike.%${safe}%,sku.ilike.%${safe}%`).limit(10);
+      else builder = builder.limit(100);
+      const { data, error } = await builder;
       if (error) throw error;
       return { currency: business.currency, matches: data };
     },

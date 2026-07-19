@@ -73,7 +73,17 @@ export function ProductsView() {
               const pct = Math.min(100, Math.round((product.stock_qty / Math.max(product.reorder_level * 2, 1)) * 100));
               return (
                 <TableRow key={product.id}>
-                  <TableCell className="font-medium"><Link href={`/dashboard/products/${product.id}`} className="hover:text-primary">{product.name}</Link></TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/dashboard/products/${product.id}`} className="flex items-center gap-2.5 hover:text-primary">
+                      {product.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.image_url} alt="" className="size-8 shrink-0 rounded-md border border-border object-cover" />
+                      ) : (
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground"><HugeiconsIcon icon={PackageIcon} size={14} /></span>
+                      )}
+                      {product.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="hidden font-mono text-xs text-muted-foreground sm:table-cell">{product.sku ?? "—"}</TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">{product.product_categories?.name ?? "—"}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatMoney(product.price, currency)}</TableCell>

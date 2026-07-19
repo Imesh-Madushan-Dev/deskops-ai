@@ -31,6 +31,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
         sku: String(formData.get("sku") ?? "") || null,
         price: Number(formData.get("price") ?? 0),
         reorderLevel: Number(formData.get("reorderLevel") ?? 0),
+        imageUrl: String(formData.get("imageUrl") ?? "") || null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update product.");
@@ -54,6 +55,16 @@ export function ProductDetailView({ productId }: { productId: string }) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5"><Label htmlFor="price">Price</Label><Input id="price" name="price" type="number" step="0.01" min="0" defaultValue={product.price} required /></div>
                 <div className="space-y-1.5"><Label htmlFor="reorderLevel">Reorder level</Label><Input id="reorderLevel" name="reorderLevel" type="number" min="0" defaultValue={product.reorder_level} required /></div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="imageUrl">Image URL</Label>
+                <div className="flex items-center gap-3">
+                  {product.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.image_url} alt={product.name} className="size-12 shrink-0 rounded-md border border-border object-cover" />
+                  )}
+                  <Input id="imageUrl" name="imageUrl" type="url" placeholder="https://…" defaultValue={product.image_url ?? ""} />
+                </div>
               </div>
               {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
               <div className="flex flex-wrap gap-3">

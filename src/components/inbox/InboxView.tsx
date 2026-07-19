@@ -78,6 +78,10 @@ function Bubble({ message }: { message: Message }) {
   return (
     <div className={cn("flex", outbound ? "justify-end" : "justify-start")}>
       <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm shadow-sm", outbound ? "rounded-br-md bg-primary text-white" : "rounded-bl-md border border-border/60 bg-card")}>
+        {message.media_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={message.media_url} alt="" className="mb-1.5 max-h-48 w-full rounded-lg object-cover" />
+        )}
         <p className="whitespace-pre-wrap">{message.body}</p>
         <p className={cn("mt-1 text-[10px] tracking-wide uppercase", outbound ? "text-white/70" : "text-muted-foreground")}>
           {message.sender === "agent" ? "AI agent" : message.sender} · {new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

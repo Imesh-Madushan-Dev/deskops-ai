@@ -21,6 +21,7 @@ export function ProductFormDialog({ open, onOpenChange }: { open: boolean; onOpe
         cost: formData.get("cost") ? Number(formData.get("cost")) : null,
         stockQty: Number(formData.get("stockQty") ?? 0),
         reorderLevel: Number(formData.get("reorderLevel") ?? 0),
+        imageUrl: String(formData.get("imageUrl") ?? "") || null,
         categoryName: String(formData.get("category") ?? "") || null,
         supplierName: String(formData.get("supplier") ?? "") || null,
         isActive: true,
@@ -52,6 +53,7 @@ export function ProductFormDialog({ open, onOpenChange }: { open: boolean; onOpe
             <div className="space-y-1.5"><Label htmlFor="category">Category (optional)</Label><Input id="category" name="category" /></div>
             <div className="space-y-1.5"><Label htmlFor="supplier">Supplier (optional)</Label><Input id="supplier" name="supplier" /></div>
           </div>
+          <div className="space-y-1.5"><Label htmlFor="imageUrl">Image URL (optional)</Label><Input id="imageUrl" name="imageUrl" type="url" placeholder="https://…" /></div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={createProduct.isPending} className="btn-purple border-0">{createProduct.isPending ? "Saving…" : "Save product"}</Button>
