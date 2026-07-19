@@ -49,7 +49,7 @@ export function createSalesTools(context: ConversationToolContext) {
       "Send a product's photo to the customer as a WhatsApp image message. ONLY use when the conversation is about ONE specific product AND the customer asked to see it (or said yes to your offer). Never send images unprompted or for whole lists.",
     inputSchema: z.object({
       productId: z.string().uuid().describe("The product id from checkStock"),
-      caption: z.string().max(500).optional().describe("Short caption in the customer's language, e.g. name and price"),
+      caption: z.string().max(500).optional().describe("Short natural caption in the customer's language — like a shop assistant texting, e.g. 'This is the canvas tote, 2,800 LKR 😊'. No catalog punctuation or em dashes."),
     }),
     execute: async ({ productId, caption }) => {
       const { supabase, business } = await getCurrentBusiness(context.businessOverride);
@@ -62,7 +62,8 @@ export function createSalesTools(context: ConversationToolContext) {
       if (error) throw error;
       if (!product.image_url) return { sent: false, note: "This product has no image — tell the customer a photo isn't available right now." };
 
-      const send = await sendWhatsappImage(business.whatsapp_session ?? "default", context.chatId, product.image_url, caption ?? product.name);
+      const naturalName = product.name.replace(/\s*—\s*/g, " ");
+      const send = await sendWhatsappImage(business.whatsapp_session ?? "default", context.chatId, product.image_url, caption ?? naturalName);
       await supabase.from("messages").insert({
         business_id: business.id,
         conversation_id: context.conversationId,
@@ -72,7 +73,7 @@ export function createSalesTools(context: ConversationToolContext) {
         media_url: product.image_url,
         provider_message_id: send.sent ? send.providerMessageId : null,
       });
-      return { sent: send.sent, note: send.sent ? "Image sent. Don't repeat the image link in your text reply." : "WhatsApp is not connected — image not sent." };
+      return { sent: send.sent, note: send.sent ? "Image sent with its caption — the customer already sees it. Reply with EMPTY text unless they asked something else." : "WhatsApp is not connected — image not sent." };
     },
   });
 
