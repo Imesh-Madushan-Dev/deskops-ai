@@ -1,25 +1,67 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageIntro, PageShell } from "@/components/dashboard/ui";
-import { useCustomer } from "@/lib/query/customers";
+import { useCustomer, useDeleteCustomer } from "@/lib/query/customers";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { contactLabel } from "@/lib/utils/contact";
 import { formatMoney } from "@/lib/utils/money";
 
 export function CustomerDetailView({ customerId }: { customerId: string }) {
+  const router = useRouter();
   const { data: customer, isLoading } = useCustomer(customerId);
   const { data: overview } = useDashboardOverview();
+  const deleteCustomer = useDeleteCustomer();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const currency = overview?.business.currency ?? "LKR";
 
   if (isLoading) return <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">Loading…</main>;
   if (!customer) return <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted-foreground">Customer not found.</main>;
 
+  async function handleDelete() {
+    setError(null);
+    try {
+      await deleteCustomer.mutateAsync(customerId);
+      router.push("/dashboard/customers");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete customer.");
+    }
+  }
+
   return (
-    <PageShell crumbs={[{ label: "Customers", href: "/dashboard/customers" }, customer.name ?? "Customer"]} width="max-w-3xl">
+    <PageShell
+      crumbs={[{ label: "Customers", href: "/dashboard/customers" }, customer.name ?? "Customer"]}
+      width="max-w-3xl"
+      actions={overview?.isOwner ? (
+        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmOpen(true)}>
+          <HugeiconsIcon icon={Delete02Icon} size={16} /> Delete
+        </Button>
+      ) : undefined}
+    >
       <PageIntro eyebrow={contactLabel({ whatsapp_number: customer.whatsapp_number })} title={customer.name ?? "Unnamed customer"} description={customer.notes ?? "No notes yet."} />
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete this customer?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This permanently deletes <span className="font-medium text-foreground">{customer.name ?? contactLabel({ whatsapp_number: customer.whatsapp_number })}</span> and all their conversations, messages, invoices, and ledger records. This cannot be undone.
+          </p>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={deleteCustomer.isPending}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteCustomer.isPending}>{deleteCustomer.isPending ? "Deleting…" : "Delete permanently"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
         <section className="mt-8 grid gap-7 lg:grid-cols-2">
           <Card className="border-border/80">

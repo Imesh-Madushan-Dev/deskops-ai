@@ -995,6 +995,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_customer_cascade: {
+        Args: { p_customer_id: string }
+        Returns: undefined
+      }
       match_embeddings: {
         Args: {
           match_count?: number

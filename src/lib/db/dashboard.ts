@@ -3,6 +3,8 @@ import { readAutoReply, readAutoInvoice } from "@/lib/db/settings";
 
 export async function getDashboardOverview() {
   const { supabase, business } = await getCurrentBusiness();
+  const { data: claims } = await supabase.auth.getClaims();
+  const isOwner = business.owner_user_id === claims?.claims.sub;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const [conversations, approvals, products, invoices] = await Promise.all([
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("business_id", business.id).eq("status", "open").eq("awaiting_reply", true),
@@ -14,6 +16,7 @@ export async function getDashboardOverview() {
   const salesToday = (invoices.data ?? []).reduce((sum, invoice) => sum + Number(invoice.total), 0);
   return {
     business: { ...business, whatsappSession: business.whatsapp_session, whatsappConnected: Boolean(business.whatsapp_session), autoApproveReplies: readAutoReply(business.settings), autoApproveInvoices: readAutoInvoice(business.settings) },
+    isOwner,
     conversations: conversations.count ?? 0,
     approvals: approvals.count ?? 0,
     lowStock: products.count ?? 0,

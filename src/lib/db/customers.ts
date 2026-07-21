@@ -47,6 +47,14 @@ export async function createCustomer(input: CustomerInput) {
   return data;
 }
 
+/** Hard-deletes the customer and their whole footprint (conversations, messages, invoices, items,
+ *  ledger, payments) in one transaction. The RPC enforces owner-only — non-owners get a 42501 error. */
+export async function deleteCustomer(id: string) {
+  const { supabase } = await getCurrentBusiness();
+  const { error } = await supabase.rpc("delete_customer_cascade", { p_customer_id: id });
+  if (error) throw error;
+}
+
 export async function updateCustomer(id: string, input: Partial<CustomerInput>) {
   const { supabase, business } = await getCurrentBusiness();
   const { data, error } = await supabase

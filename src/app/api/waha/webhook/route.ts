@@ -5,6 +5,7 @@ import { verifyWahaSignature } from "@/lib/waha/verify";
 import { enqueueJob } from "@/lib/jobs/enqueue";
 import { runJobWorker } from "@/lib/jobs/worker";
 import { isSystemChatId } from "@/lib/utils/contact";
+import { resolveLidToPhone } from "@/lib/waha/client";
 
 // The agent's tool loop can take several seconds; give it room past the default.
 export const maxDuration = 60;
@@ -60,7 +61,10 @@ export async function POST(request: Request) {
     webhookEventId = data.id;
   }
 
-  const whatsappNumber = payload.from.replace(/@c\.us$/, "");
+  // `@lid` is a WhatsApp privacy id, not a phone — resolve it via WAHA so the owner sees a real number.
+  const whatsappNumber = /@lid$/i.test(payload.from)
+    ? (await resolveLidToPhone(session, payload.from)) ?? payload.from.replace(/@lid$/i, "")
+    : payload.from.replace(/@c\.us$/, "");
   const notifyName = payload.notifyName ?? payload._data?.notifyName;
   const { data: customer, error: customerError } = await supabase
     .from("customers")

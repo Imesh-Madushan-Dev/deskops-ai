@@ -101,25 +101,12 @@ async function processJob(job: { business_id: string; job_type: string; payload:
       : whatsappStyle;
 
     const result = await runOrchestrator({ ...payload, history, contextNote, businessOverride: { businessId: job.business_id } });
-    // The agent's conversational reply (acknowledgment) always goes to the customer so they're never
-    // left hanging. The invoice it drafts is queued separately and, unless invoices are automated,
-    // its quote is sent only after the owner approves it — money still gates by default.
     const reply = (await result.text).trim();
-    if (reply) {
-      if (autoReply) {
-        const send = await sendWhatsappMessage(session, payload.chatId, reply);
-        await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: reply, provider_message_id: send.sent ? send.providerMessageId : null });
-        await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
-      } else {
-        await createApproval(
-          { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: reply } },
-          { businessId: job.business_id },
-        );
-      }
-    }
 
-    // Auto-send invoices the agent just drafted, if the owner enabled it. Otherwise they stay
-    // pending in Approvals (the acknowledgment above already told the customer to wait).
+    // Auto-send invoices the agent just drafted, if the owner enabled it. The invoice body already
+    // carries the customer-facing message (number + total), so when we send it we must NOT also send
+    // the agent's free-text reply — that's what produced two near-identical messages.
+    let invoiceSentThisRun = false;
     if (autoInvoice) {
       const { data: pending } = await supabase
         .from("approvals")
@@ -133,7 +120,24 @@ async function processJob(job: { business_id: string; job_type: string; payload:
         await supabase.from("invoices").update({ status: "sent", issued_at: new Date().toISOString() }).eq("id", p.invoiceId).eq("business_id", job.business_id).eq("status", "draft");
         const send = await sendWhatsappMessage(session, p.chatId, p.body);
         await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: p.body, provider_message_id: send.sent ? send.providerMessageId : null });
+        await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
         await supabase.from("approvals").update({ status: "executed" }).eq("id", appr.id);
+        invoiceSentThisRun = true;
+      }
+    }
+
+    // The agent's conversational reply goes out only when we didn't just auto-send an invoice for it
+    // (otherwise it duplicates the invoice message). Unless auto-reply is on, it queues for approval.
+    if (reply && !invoiceSentThisRun) {
+      if (autoReply) {
+        const send = await sendWhatsappMessage(session, payload.chatId, reply);
+        await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: reply, provider_message_id: send.sent ? send.providerMessageId : null });
+        await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
+      } else {
+        await createApproval(
+          { actionType: "send_message", conversationId: payload.conversationId, payload: { conversationId: payload.conversationId, chatId: payload.chatId, body: reply } },
+          { businessId: job.business_id },
+        );
       }
     }
     return;

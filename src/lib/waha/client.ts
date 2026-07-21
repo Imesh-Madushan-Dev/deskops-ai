@@ -6,6 +6,27 @@ export function isWahaConfigured() {
   return Boolean(process.env.WAHA_BASE_URL && process.env.WAHA_API_KEY);
 }
 
+/** WhatsApp now hands out `@lid` privacy ids instead of phone numbers on some chats. Resolve the real
+ *  phone via WAHA's lid endpoint so the owner sees a number, not a meaningless id. Returns the digits
+ *  (no suffix), or null if WAHA is unconfigured / can't map it — caller falls back to the raw id.
+ *  ponytail: no cache; add a 24h cache if lid volume ever makes this a hot path. */
+export async function resolveLidToPhone(session: string, lid: string): Promise<string | null> {
+  if (!isWahaConfigured()) return null;
+  const digits = lid.replace(/@lid$/i, "");
+  const base = process.env.WAHA_BASE_URL!.replace(/\/+$/, "");
+  try {
+    const response = await fetch(`${base}/api/${encodeURIComponent(session)}/lids/${encodeURIComponent(digits)}`, {
+      headers: { accept: "application/json", "X-Api-Key": process.env.WAHA_API_KEY! },
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { pn?: string };
+    const pn = data.pn?.replace(/@c\.us$/i, "").trim();
+    return pn || null; // WAHA can return an empty pn — treat as unresolved.
+  } catch {
+    return null;
+  }
+}
+
 export async function sendWhatsappMessage(session: string, chatId: string, text: string) {
   if (!isWahaConfigured()) return { sent: false, reason: "WAHA is not configured" as const };
 

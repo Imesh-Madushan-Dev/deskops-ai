@@ -3,6 +3,7 @@ import { qk } from "./keys";
 
 type Overview = {
   business: { id: string; name: string; currency: string; timezone: string; whatsappSession: string | null; whatsappConnected: boolean; autoApproveReplies: boolean; autoApproveInvoices: boolean };
+  isOwner: boolean;
   conversations: number;
   approvals: number;
   lowStock: number;

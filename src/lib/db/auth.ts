@@ -15,12 +15,12 @@ export async function requireUser() {
 export async function getCurrentBusiness(override?: { businessId: string }) {
   if (override) {
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("businesses").select("id,name,currency,timezone,whatsapp_session,settings").eq("id", override.businessId).single();
+    const { data, error } = await supabase.from("businesses").select("id,name,currency,timezone,whatsapp_session,settings,owner_user_id").eq("id", override.businessId).single();
     if (error) throw error;
     return { supabase, business: data };
   }
   const { supabase } = await requireUser();
-  const { data, error } = await supabase.from("businesses").select("id,name,currency,timezone,whatsapp_session,settings").order("created_at").limit(1).maybeSingle();
+  const { data, error } = await supabase.from("businesses").select("id,name,currency,timezone,whatsapp_session,settings,owner_user_id").order("created_at").limit(1).maybeSingle();
   if (error) throw error;
   if (!data) redirect("/onboarding");
   return { supabase, business: data };

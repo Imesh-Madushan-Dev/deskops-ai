@@ -32,6 +32,14 @@ export function useCreateCustomer() {
   });
 }
 
+export function useDeleteCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => fetch(`/api/customers/${id}`, { method: "DELETE" }).then((r) => json<{ ok: true }>(r)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.customers }),
+  });
+}
+
 export function useUpdateCustomer(id: string) {
   const qc = useQueryClient();
   return useMutation({
