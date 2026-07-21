@@ -8,6 +8,7 @@ type InvoiceImageInput = {
   currency: string;
   number: string;
   dateISO: string;
+  billTo?: { name?: string | null; address?: string | null; phone?: string | null };
   items: { description: string; quantity: number; unit_price: number; line_total: number }[];
   subtotal: number;
   tax: number;
@@ -26,7 +27,8 @@ const cell = (flex: number, align: "flex-start" | "flex-end") => ({ display: "fl
  *  built-in font is enough — no custom font wiring needed. */
 export async function renderInvoiceImagePng(input: InvoiceImageInput): Promise<string> {
   const width = 820;
-  const height = 360 + input.items.length * 52 + (input.tax > 0 ? 44 : 0);
+  const billLines = [input.billTo?.name, input.billTo?.address, input.billTo?.phone].filter((v): v is string => Boolean(v && v.trim()));
+  const height = 360 + input.items.length * 52 + (input.tax > 0 ? 44 : 0) + (billLines.length ? 40 + billLines.length * 28 : 0);
   const date = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(input.dateISO));
 
   const image = new ImageResponse(
@@ -40,6 +42,15 @@ export async function renderInvoiceImagePng(input: InvoiceImageInput): Promise<s
           <div style={{ display: "flex" }}>{input.number}</div>
           <div style={{ display: "flex" }}>{date}</div>
         </div>
+
+        {billLines.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", marginTop: 22 }}>
+            <div style={{ display: "flex", fontSize: 16, color: MUTED, fontWeight: 700, letterSpacing: 1 }}>BILL TO</div>
+            {billLines.map((line, i) => (
+              <div key={i} style={{ display: "flex", fontSize: 20, marginTop: 4, fontWeight: i === 0 ? 700 : 400 }}>{line}</div>
+            ))}
+          </div>
+        )}
 
         <div style={{ display: "flex", height: 2, backgroundColor: LINE, marginTop: 20, marginBottom: 18 }} />
 

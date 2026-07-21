@@ -18,17 +18,22 @@ export async function sendInvoiceToCustomer(input: {
   const supabase = createAdminClient();
   try {
     const [{ data: invoice }, { data: items }, { data: biz }] = await Promise.all([
-      supabase.from("invoices").select("number, subtotal, tax, total, created_at").eq("id", input.invoiceId).eq("business_id", input.businessId).single(),
+      supabase.from("invoices").select("number, subtotal, tax, total, created_at, customer_id").eq("id", input.invoiceId).eq("business_id", input.businessId).single(),
       supabase.from("invoice_items").select("description, quantity, unit_price, line_total").eq("invoice_id", input.invoiceId).eq("business_id", input.businessId),
       supabase.from("businesses").select("name, currency").eq("id", input.businessId).single(),
     ]);
     if (!invoice || !biz) throw new Error("invoice or business not found");
+
+    const { data: customer } = invoice.customer_id
+      ? await supabase.from("customers").select("name, address, phone").eq("id", invoice.customer_id).eq("business_id", input.businessId).maybeSingle()
+      : { data: null };
 
     const base64 = await renderInvoiceImagePng({
       businessName: biz.name,
       currency: biz.currency,
       number: invoice.number,
       dateISO: invoice.created_at,
+      billTo: customer ? { name: customer.name, address: customer.address, phone: customer.phone } : undefined,
       items: items ?? [],
       subtotal: Number(invoice.subtotal),
       tax: Number(invoice.tax),

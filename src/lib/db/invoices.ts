@@ -74,6 +74,49 @@ export async function createInvoice(input: InvoiceInput, override?: { businessId
   return invoice;
 }
 
+/** Thrown when a revise/cancel is attempted on a paid invoice — callers map it to a friendly response. */
+export class InvoicePaidError extends Error {
+  constructor() {
+    super("PAID");
+    this.name = "InvoicePaidError";
+  }
+}
+
+/** Replaces an unpaid invoice's items and recomputes totals in place (same invoice number). Resets it to
+ *  a draft so the corrected version is re-sent. Refuses once the invoice is paid. */
+export async function reviseInvoice(id: string, items: InvoiceInput["items"], override?: { businessId: string }) {
+  const { supabase, business } = await getCurrentBusiness(override);
+  const { data: current, error: fetchError } = await supabase.from("invoices").select("status").eq("business_id", business.id).eq("id", id).maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!current) throw new Error("Invoice not found");
+  if (current.status === "paid") throw new InvoicePaidError();
+
+  const { subtotal, tax, total } = calculateInvoiceTotals(items.map((i) => ({ quantity: i.quantity, unitPrice: i.unitPrice })), 0);
+  await supabase.from("invoice_items").delete().eq("business_id", business.id).eq("invoice_id", id);
+  const { error: itemsError } = await supabase.from("invoice_items").insert(
+    items.map((item) => ({
+      business_id: business.id,
+      invoice_id: id,
+      product_id: item.productId || null,
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      line_total: Math.round(item.quantity * item.unitPrice * 100) / 100,
+    })),
+  );
+  if (itemsError) throw itemsError;
+
+  const { data: invoice, error: updateError } = await supabase
+    .from("invoices")
+    .update({ subtotal, tax, total, status: "draft", issued_at: null })
+    .eq("business_id", business.id)
+    .eq("id", id)
+    .select()
+    .single();
+  if (updateError) throw updateError;
+  return invoice;
+}
+
 export async function markInvoiceSent(id: string) {
   const { supabase, business } = await getCurrentBusiness();
   const { error } = await supabase.from("invoices").update({ status: "sent", issued_at: new Date().toISOString() }).eq("business_id", business.id).eq("id", id).eq("status", "draft");

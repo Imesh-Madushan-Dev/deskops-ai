@@ -1,14 +1,56 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { getCurrentBusiness } from "@/lib/db/auth";
-import { createInvoice } from "@/lib/db/invoices";
+import { createInvoice, reviseInvoice, voidInvoice, InvoicePaidError } from "@/lib/db/invoices";
 import { createApproval } from "@/lib/db/approvals";
 import { formatMoney } from "@/lib/utils/money";
 import { contactLabel } from "@/lib/utils/contact";
 import { sendWhatsappImage } from "@/lib/waha/client";
 import type { ConversationToolContext } from "./context";
 
+type InvoiceItems = { productId?: string; description: string; quantity: number; unitPrice: number }[];
+
 export function createSalesTools(context: ConversationToolContext) {
+  // Resolve the customer this chat belongs to (invoices bill to them; details are gathered against them).
+  async function currentCustomerId(supabase: Awaited<ReturnType<typeof getCurrentBusiness>>["supabase"]) {
+    const { data } = await supabase.from("conversations").select("customer_id").eq("id", context.conversationId).maybeSingle();
+    return data?.customer_id ?? null;
+  }
+
+  // The invoice last drafted/sent in THIS chat — the one revise/cancel act on.
+  async function currentInvoiceId(supabase: Awaited<ReturnType<typeof getCurrentBusiness>>["supabase"], businessId: string) {
+    const { data } = await supabase
+      .from("approvals")
+      .select("payload")
+      .eq("business_id", businessId)
+      .eq("conversation_id", context.conversationId)
+      .eq("action_type", "send_invoice")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return (data?.payload as { invoiceId?: string })?.invoiceId ?? null;
+  }
+
+  // Never invoice more than stock. Returns the lines we can't fulfil (empty = all good).
+  async function stockShortfalls(supabase: Awaited<ReturnType<typeof getCurrentBusiness>>["supabase"], businessId: string, items: InvoiceItems) {
+    const productIds = items.map((i) => i.productId).filter((id): id is string => Boolean(id));
+    if (!productIds.length) return [];
+    const { data: stockRows } = await supabase.from("products").select("id, name, stock_qty").eq("business_id", businessId).in("id", productIds);
+    const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]));
+    return items
+      .filter((i) => i.productId && (stockById.get(i.productId)?.stock_qty ?? 0) < i.quantity)
+      .map((i) => ({ product: stockById.get(i.productId!)?.name ?? i.description, requested: i.quantity, available: stockById.get(i.productId!)?.stock_qty ?? 0 }));
+  }
+
+  // Queue the (updated) invoice to be sent as a formatted image with a friendly caption.
+  async function queueInvoiceSend(business: { currency: string }, invoice: { id: string; number: string; total: number }, friendly: string) {
+    const body = `${friendly}\n\n🧾 ${invoice.number} · ${formatMoney(invoice.total, business.currency)}`;
+    return createApproval(
+      { actionType: "send_invoice", conversationId: context.conversationId, payload: { conversationId: context.conversationId, chatId: context.chatId, invoiceId: invoice.id, caption: friendly, body } },
+      context.businessOverride,
+    );
+  }
+
   const draftAndQueueInvoice = tool({
     description: "Draft an invoice for the items discussed and queue it for the owner's approval before sending to the customer. Prices/totals are computed from the real catalog, never invented.",
     inputSchema: z.object({
@@ -52,38 +94,30 @@ export function createSalesTools(context: ConversationToolContext) {
 
       // Stock guard: never draft an invoice for more than we actually have. The model must tell the
       // customer the real available quantity BEFORE any invoice — not invoice 100 when 60 are in stock.
-      const productIds = items.map((i) => i.productId).filter((id): id is string => Boolean(id));
-      if (productIds.length) {
-        const { data: stockRows } = await supabase.from("products").select("id, name, stock_qty").eq("business_id", business.id).in("id", productIds);
-        const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]));
-        const shortfalls = items
-          .filter((i) => i.productId && (stockById.get(i.productId)?.stock_qty ?? 0) < i.quantity)
-          .map((i) => ({ product: stockById.get(i.productId!)?.name ?? i.description, requested: i.quantity, available: stockById.get(i.productId!)?.stock_qty ?? 0 }));
-        if (shortfalls.length) {
-          return {
-            status: "insufficient_stock" as const,
-            shortfalls,
-            note: "Do NOT create this invoice. Tell the customer the exact available quantity for each item below, and ask if they'd like that quantity instead — or offer to request more from the owner with escalateToOwner. Never invoice more than the available stock.",
-          };
-        }
+      const shortfalls = await stockShortfalls(supabase, business.id, items);
+      if (shortfalls.length) {
+        return {
+          status: "insufficient_stock" as const,
+          shortfalls,
+          note: "Do NOT create this invoice. Tell the customer the exact available quantity for each item below, and ask if they'd like that quantity instead — or offer to request more from the owner with escalateToOwner. Never invoice more than the available stock.",
+        };
       }
 
-      const invoice = await createInvoice({ customerId: customerId ?? null, items, taxRate: 0 }, context.businessOverride);
+      // Billing details guard: an invoice must have a real Bill To. Collect name + address + phone first.
+      const cid = customerId ?? (await currentCustomerId(supabase));
+      const { data: cust } = cid ? await supabase.from("customers").select("name, address, phone").eq("business_id", business.id).eq("id", cid).maybeSingle() : { data: null };
+      const missing = ["name", "address", "phone"].filter((f) => !((cust as Record<string, string | null> | null)?.[f]?.toString().trim()));
+      if (missing.length) {
+        return {
+          status: "need_customer_details" as const,
+          missing,
+          note: `Before making the invoice, ask the customer for their ${missing.join(", ")} and save it with saveCustomerDetails. Do NOT create the invoice until name, address, and phone are all on file.`,
+        };
+      }
+
+      const invoice = await createInvoice({ customerId: cid, items, taxRate: 0 }, context.businessOverride);
       const friendly = customerMessage?.trim() || "Here's your quote — reply to confirm and we'll get it ready.";
-      // The model writes customerMessage BEFORE the invoice exists, so it can't include the number; and
-      // its own *bold* often breaks (e.g. Sinhala suffixes glued to a closing *). Append the number and
-      // total deterministically so both always render correctly — money formatting stays in code.
-      // The invoice is sent as a formatted image; `caption` is the friendly line shown with it, and
-      // `body` is the plain-text fallback (WAHA off / image render fails) — both carry number + total.
-      const body = `${friendly}\n\n🧾 ${invoice.number} · ${formatMoney(invoice.total, business.currency)}`;
-      const approval = await createApproval(
-        {
-          actionType: "send_invoice",
-          conversationId: context.conversationId,
-          payload: { conversationId: context.conversationId, chatId: context.chatId, invoiceId: invoice.id, caption: friendly, body },
-        },
-        context.businessOverride,
-      );
+      const approval = await queueInvoiceSend(business, invoice, friendly);
       return {
         invoiceNumber: invoice.number,
         total: invoice.total,
@@ -186,5 +220,64 @@ export function createSalesTools(context: ConversationToolContext) {
     },
   });
 
-  return { draftAndQueueInvoice, sendProductImage, getCustomerContext, escalateToOwner };
+  const saveCustomerDetails = tool({
+    description:
+      "Save the customer's billing details (full name, delivery address, contact phone) onto their profile. Call this after asking for the details the invoice needs — always before draftAndQueueInvoice if any were missing.",
+    inputSchema: z.object({
+      name: z.string().trim().min(1).max(120).optional(),
+      address: z.string().trim().min(1).max(500).optional(),
+      phone: z.string().trim().min(3).max(40).optional(),
+    }),
+    execute: async ({ name, address, phone }) => {
+      const { supabase, business } = await getCurrentBusiness(context.businessOverride);
+      const cid = await currentCustomerId(supabase);
+      if (!cid) return { saved: false as const, note: "No customer record for this chat yet." };
+      const patch = { ...(name && { name }), ...(address && { address }), ...(phone && { phone }) };
+      if (!Object.keys(patch).length) return { saved: false as const, note: "Nothing to save — ask for the missing detail first." };
+      await supabase.from("customers").update(patch).eq("business_id", business.id).eq("id", cid);
+      return { saved: true as const, note: "Saved. If name, address and phone are now all on file, you can create the invoice." };
+    },
+  });
+
+  const reviseInvoiceTool = tool({
+    description:
+      "Change the items on the CURRENT invoice for this chat when the customer edits their order (different quantity, add/remove an item) — instead of creating a new invoice. Recomputes totals and re-sends the updated invoice. Only works while the invoice is not yet paid.",
+    inputSchema: z.object({
+      items: z.array(z.object({ productId: z.string().uuid().optional(), description: z.string(), quantity: z.number().int().min(1), unitPrice: z.number().min(0) })).min(1).describe("The FULL corrected item list (not just the change)."),
+      customerMessage: z.string().min(1).max(2000).optional().describe("Short friendly line in the customer's language, e.g. 'Updated your invoice 👍'. No price/number — added automatically."),
+    }),
+    execute: async ({ items, customerMessage }) => {
+      const { supabase, business } = await getCurrentBusiness(context.businessOverride);
+      const invoiceId = await currentInvoiceId(supabase, business.id);
+      if (!invoiceId) return { status: "no_invoice" as const, note: "There's no invoice for this chat yet — use draftAndQueueInvoice to create one." };
+
+      const shortfalls = await stockShortfalls(supabase, business.id, items);
+      if (shortfalls.length) return { status: "insufficient_stock" as const, shortfalls, note: "Tell the customer the real available quantity; do not revise beyond stock." };
+
+      try {
+        const invoice = await reviseInvoice(invoiceId, items, context.businessOverride);
+        await queueInvoiceSend(business, invoice, customerMessage?.trim() || "Here's your updated invoice.");
+        return { status: "revised" as const, invoiceNumber: invoice.number, note: "Invoice updated and the corrected version is being sent. Do NOT write the price/number yourself. Reply with EMPTY text." };
+      } catch (e) {
+        if (e instanceof InvoicePaidError) return { status: "already_paid" as const, note: "This invoice is already paid and cannot be changed. Use escalateToOwner if the customer needs a refund or correction." };
+        throw e;
+      }
+    },
+  });
+
+  const cancelInvoice = tool({
+    description: "Cancel/void the CURRENT invoice for this chat when the customer cancels their order. Only works while the invoice is not yet paid.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const { supabase, business } = await getCurrentBusiness(context.businessOverride);
+      const invoiceId = await currentInvoiceId(supabase, business.id);
+      if (!invoiceId) return { status: "no_invoice" as const, note: "There's no invoice for this chat to cancel." };
+      const { data: inv } = await supabase.from("invoices").select("number, status").eq("business_id", business.id).eq("id", invoiceId).maybeSingle();
+      if (inv?.status === "paid") return { status: "already_paid" as const, note: "This invoice is already paid — it can't be cancelled here. Use escalateToOwner for a refund." };
+      await voidInvoice(invoiceId);
+      return { status: "cancelled" as const, invoiceNumber: inv?.number, note: `Invoice ${inv?.number ?? ""} is cancelled. Tell the customer their order/invoice has been cancelled.` };
+    },
+  });
+
+  return { draftAndQueueInvoice, sendProductImage, getCustomerContext, escalateToOwner, saveCustomerDetails, reviseInvoice: reviseInvoiceTool, cancelInvoice };
 }

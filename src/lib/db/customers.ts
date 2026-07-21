@@ -8,6 +8,8 @@ export const customerInputSchema = z.object({
   whatsappNumber: z.string().trim().min(5).max(20),
   email: z.string().trim().email().optional().nullable().or(z.literal("")),
   notes: z.string().trim().max(2000).optional().nullable(),
+  address: z.string().trim().max(500).optional().nullable(),
+  phone: z.string().trim().max(40).optional().nullable(),
 });
 export type CustomerInput = z.infer<typeof customerInputSchema>;
 
@@ -40,7 +42,7 @@ export async function createCustomer(input: CustomerInput) {
   const { supabase, business } = await getCurrentBusiness();
   const { data, error } = await supabase
     .from("customers")
-    .insert({ business_id: business.id, name: input.name || null, whatsapp_number: input.whatsappNumber, email: input.email || null, notes: input.notes || null })
+    .insert({ business_id: business.id, name: input.name || null, whatsapp_number: input.whatsappNumber, email: input.email || null, notes: input.notes || null, address: input.address || null, phone: input.phone || null })
     .select()
     .single();
   if (error) throw error;
@@ -64,6 +66,8 @@ export async function updateCustomer(id: string, input: Partial<CustomerInput>) 
       ...(input.whatsappNumber !== undefined && { whatsapp_number: input.whatsappNumber }),
       ...(input.email !== undefined && { email: input.email || null }),
       ...(input.notes !== undefined && { notes: input.notes || null }),
+      ...(input.address !== undefined && { address: input.address || null }),
+      ...(input.phone !== undefined && { phone: input.phone || null }),
     })
     .eq("business_id", business.id)
     .eq("id", id)
