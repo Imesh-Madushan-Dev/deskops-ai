@@ -8,6 +8,7 @@ import { getBooksSummary } from "@/lib/db/ledger";
 import { createApproval } from "@/lib/db/approvals";
 import { enqueueJob } from "@/lib/jobs/enqueue";
 import { sendWhatsappMessage } from "@/lib/waha/client";
+import { sendInvoiceToCustomer } from "@/lib/invoice/send";
 import { readAutoReply, readAutoInvoice } from "@/lib/db/settings";
 
 const BATCH_SIZE = 10;
@@ -116,10 +117,10 @@ async function processJob(job: { business_id: string; job_type: string; payload:
         .eq("action_type", "send_invoice")
         .eq("status", "pending");
       for (const appr of pending ?? []) {
-        const p = appr.payload as { chatId: string; invoiceId: string; body: string };
+        const p = appr.payload as { chatId: string; invoiceId: string; caption?: string; body: string };
         await supabase.from("invoices").update({ status: "sent", issued_at: new Date().toISOString() }).eq("id", p.invoiceId).eq("business_id", job.business_id).eq("status", "draft");
-        const send = await sendWhatsappMessage(session, p.chatId, p.body);
-        await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: p.body, provider_message_id: send.sent ? send.providerMessageId : null });
+        const send = await sendInvoiceToCustomer({ session, chatId: p.chatId, invoiceId: p.invoiceId, businessId: job.business_id, caption: p.caption ?? p.body, fallbackBody: p.body });
+        await supabase.from("messages").insert({ business_id: job.business_id, conversation_id: payload.conversationId, direction: "outbound", sender: "agent", body: send.recordedBody, provider_message_id: send.providerMessageId });
         await supabase.from("conversations").update({ last_message_at: new Date().toISOString(), awaiting_reply: false }).eq("id", payload.conversationId);
         await supabase.from("approvals").update({ status: "executed" }).eq("id", appr.id);
         invoiceSentThisRun = true;
@@ -149,6 +150,14 @@ async function processJob(job: { business_id: string; job_type: string; payload:
     const to = `${forDate}T23:59:59.999Z`;
     const summary = await getBooksSummary({ from, to }, { businessId: job.business_id });
     const supabase = createAdminClient();
+
+    // Keep model_usage from growing unbounded: one row per agent call adds up fast. We only need it
+    // for recent cost/usage reporting, so prune anything older than 90 days on the daily tick.
+    // ponytail: 90-day retention; if you need long-term cost history, roll these up into a monthly
+    // aggregate table before deleting instead of dropping them.
+    const cutoff = new Date(Date.now() - 90 * 24 * 3600_000).toISOString();
+    await supabase.from("model_usage").delete().eq("business_id", job.business_id).lt("created_at", cutoff);
+
     const { error } = await supabase
       .from("daily_insights")
       .upsert(

@@ -4,6 +4,7 @@ import { getCurrentBusiness } from "@/lib/db/auth";
 import { createInvoice } from "@/lib/db/invoices";
 import { createApproval } from "@/lib/db/approvals";
 import { formatMoney } from "@/lib/utils/money";
+import { contactLabel } from "@/lib/utils/contact";
 import { sendWhatsappImage } from "@/lib/waha/client";
 import type { ConversationToolContext } from "./context";
 
@@ -49,17 +50,37 @@ export function createSalesTools(context: ConversationToolContext) {
         };
       }
 
+      // Stock guard: never draft an invoice for more than we actually have. The model must tell the
+      // customer the real available quantity BEFORE any invoice — not invoice 100 when 60 are in stock.
+      const productIds = items.map((i) => i.productId).filter((id): id is string => Boolean(id));
+      if (productIds.length) {
+        const { data: stockRows } = await supabase.from("products").select("id, name, stock_qty").eq("business_id", business.id).in("id", productIds);
+        const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]));
+        const shortfalls = items
+          .filter((i) => i.productId && (stockById.get(i.productId)?.stock_qty ?? 0) < i.quantity)
+          .map((i) => ({ product: stockById.get(i.productId!)?.name ?? i.description, requested: i.quantity, available: stockById.get(i.productId!)?.stock_qty ?? 0 }));
+        if (shortfalls.length) {
+          return {
+            status: "insufficient_stock" as const,
+            shortfalls,
+            note: "Do NOT create this invoice. Tell the customer the exact available quantity for each item below, and ask if they'd like that quantity instead — or offer to request more from the owner with escalateToOwner. Never invoice more than the available stock.",
+          };
+        }
+      }
+
       const invoice = await createInvoice({ customerId: customerId ?? null, items, taxRate: 0 }, context.businessOverride);
       const friendly = customerMessage?.trim() || "Here's your quote — reply to confirm and we'll get it ready.";
       // The model writes customerMessage BEFORE the invoice exists, so it can't include the number; and
       // its own *bold* often breaks (e.g. Sinhala suffixes glued to a closing *). Append the number and
       // total deterministically so both always render correctly — money formatting stays in code.
+      // The invoice is sent as a formatted image; `caption` is the friendly line shown with it, and
+      // `body` is the plain-text fallback (WAHA off / image render fails) — both carry number + total.
       const body = `${friendly}\n\n🧾 ${invoice.number} · ${formatMoney(invoice.total, business.currency)}`;
       const approval = await createApproval(
         {
           actionType: "send_invoice",
           conversationId: context.conversationId,
-          payload: { conversationId: context.conversationId, chatId: context.chatId, invoiceId: invoice.id, body },
+          payload: { conversationId: context.conversationId, chatId: context.chatId, invoiceId: invoice.id, caption: friendly, body },
         },
         context.businessOverride,
       );
@@ -141,5 +162,29 @@ export function createSalesTools(context: ConversationToolContext) {
 
   // Plain conversational replies are not a tool — the agent just writes them as its answer, and the
   // worker either auto-sends (automation on) or queues them for approval. Only money actions gate here.
-  return { draftAndQueueInvoice, sendProductImage, getCustomerContext };
+  const escalateToOwner = tool({
+    description:
+      "Send a request to the business OWNER for something you are NOT allowed to decide yourself — a discount or special price, or a quantity beyond current stock that needs restocking. Use this instead of pretending you'll 'check with the team'. Only call it when the customer actually made such a request.",
+    inputSchema: z.object({
+      requestType: z.enum(["discount", "bulk_or_restock", "other"]),
+      summary: z.string().min(1).max(500).describe("Clear one-line summary in English for the owner to read, e.g. 'Wants 10% discount on Ceramic Mug' or 'Wants 100 Ceramic Mugs, only 60 in stock'."),
+    }),
+    execute: async ({ requestType, summary }) => {
+      const { supabase, business } = await getCurrentBusiness(context.businessOverride);
+      const { data: conv } = await supabase.from("conversations").select("customers(name, whatsapp_number)").eq("id", context.conversationId).maybeSingle();
+      const who = contactLabel(conv?.customers ?? null);
+      const body = `🔔 Customer request (${requestType}) from ${who}:\n${summary}`;
+      await createApproval(
+        {
+          actionType: "customer_request",
+          conversationId: context.conversationId,
+          payload: { conversationId: context.conversationId, chatId: context.chatId, body, requestType },
+        },
+        context.businessOverride,
+      );
+      return { status: "sent_to_owner" as const, note: "The request is now with the owner. Tell the customer you've passed it to the owner and will update them — do NOT promise a specific outcome (no discount amount, no delivery date)." };
+    },
+  });
+
+  return { draftAndQueueInvoice, sendProductImage, getCustomerContext, escalateToOwner };
 }

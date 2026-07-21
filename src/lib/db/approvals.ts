@@ -6,14 +6,15 @@ import { getCurrentBusiness, requireUser } from "@/lib/db/auth";
 import { markInvoiceSent, recordSale } from "@/lib/db/invoices";
 import { createReorder } from "@/lib/db/inventory";
 import { sendWhatsappMessage } from "@/lib/waha/client";
+import { sendInvoiceToCustomer } from "@/lib/invoice/send";
 import type { Json } from "@/types/database";
 
 const sendMessagePayload = z.object({ conversationId: z.string().uuid(), chatId: z.string(), body: z.string() });
-const sendInvoicePayload = z.object({ conversationId: z.string().uuid(), chatId: z.string(), invoiceId: z.string().uuid(), body: z.string() });
+const sendInvoicePayload = z.object({ conversationId: z.string().uuid(), chatId: z.string(), invoiceId: z.string().uuid(), caption: z.string().optional(), body: z.string() });
 const markInvoicePaidPayload = z.object({ invoiceId: z.string().uuid() });
 const reorderPayload = z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1) });
 
-export type ApprovalActionType = "send_message" | "send_invoice" | "mark_invoice_paid" | "reorder";
+export type ApprovalActionType = "send_message" | "send_invoice" | "mark_invoice_paid" | "reorder" | "customer_request";
 
 export async function listApprovals(status: "pending" | "approved" | "rejected" | "expired" | "executed" | "failed" = "pending") {
   const { supabase, business } = await getCurrentBusiness();
@@ -96,12 +97,12 @@ async function executeApproval(actionType: ApprovalActionType, payload: unknown,
   }
 
   if (actionType === "send_invoice") {
-    const { conversationId, chatId, invoiceId, body } = sendInvoicePayload.parse(payload);
+    const { conversationId, chatId, invoiceId, caption, body } = sendInvoicePayload.parse(payload);
     await markInvoiceSent(invoiceId);
-    const result = await sendWhatsappMessage(business.whatsapp_session ?? "default", chatId, body);
+    const result = await sendInvoiceToCustomer({ session: business.whatsapp_session ?? "default", chatId, invoiceId, businessId: business.id, caption: caption ?? body, fallbackBody: body });
     const { error } = await supabase
       .from("messages")
-      .insert({ business_id: business.id, conversation_id: conversationId, direction: "outbound", sender: "agent", body, provider_message_id: result.sent ? result.providerMessageId : null });
+      .insert({ business_id: business.id, conversation_id: conversationId, direction: "outbound", sender: "agent", body: result.recordedBody, provider_message_id: result.providerMessageId });
     if (error) throw error;
     return;
   }
@@ -115,6 +116,12 @@ async function executeApproval(actionType: ApprovalActionType, payload: unknown,
   if (actionType === "reorder") {
     const { productId, quantity } = reorderPayload.parse(payload);
     await createReorder({ productId, quantity });
+    return;
+  }
+
+  if (actionType === "customer_request") {
+    // Escalated customer request (discount, bulk/restock). There's nothing to auto-execute — approving
+    // just marks it handled; the owner follows up with the customer in the inbox.
     return;
   }
 }

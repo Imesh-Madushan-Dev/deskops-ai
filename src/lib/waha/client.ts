@@ -41,6 +41,22 @@ export async function sendWhatsappMessage(session: string, chatId: string, text:
   return { sent: true as const, providerMessageId: data.id ?? null };
 }
 
+/** Send a base64-encoded image (e.g. a generated invoice) to a chat. WAHA accepts the raw file bytes
+ *  in `file.data`, so no image hosting/storage is needed. */
+export async function sendWhatsappImageData(session: string, chatId: string, base64: string, mimetype: string, filename: string, caption?: string) {
+  if (!isWahaConfigured()) return { sent: false as const, reason: "WAHA is not configured" as const };
+
+  const base = process.env.WAHA_BASE_URL!.replace(/\/+$/, "");
+  const response = await fetch(`${base}/api/sendImage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Api-Key": process.env.WAHA_API_KEY! },
+    body: JSON.stringify({ session, chatId, file: { mimetype, filename, data: base64 }, caption: caption ?? "" }),
+  });
+  if (!response.ok) throw new Error(`WhatsApp image send failed (${response.status}): ${(await response.text()).slice(0, 300)}`);
+  const data = (await response.json()) as { id?: string };
+  return { sent: true as const, providerMessageId: data.id ?? null };
+}
+
 export async function sendWhatsappImage(session: string, chatId: string, imageUrl: string, caption?: string) {
   if (!isWahaConfigured()) return { sent: false, reason: "WAHA is not configured" as const };
 

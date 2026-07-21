@@ -6,7 +6,7 @@ import { createContext, useContext } from "react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { IconSvgElement } from "@hugeicons/react";
-import { ArrowUpRight01Icon, InvoiceIcon, Menu01Icon, PackageIcon, Search01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ArrowUpRight01Icon, InvoiceIcon, Menu01Icon, PackageIcon, Search01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -180,6 +180,7 @@ export const approvalMeta: Record<string, { label: string; icon: IconSvgElement 
   send_invoice: { label: "Send invoice", icon: InvoiceIcon },
   mark_invoice_paid: { label: "Mark invoice paid", icon: InvoiceIcon },
   reorder: { label: "Create reorder", icon: PackageIcon },
+  customer_request: { label: "Customer request", icon: Alert02Icon },
 };
 
 export function describeApproval(payload: Record<string, unknown>) {
