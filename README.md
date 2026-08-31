@@ -12,7 +12,6 @@ Deskops AI reads incoming customer messages, grounds itself in the shop's **real
 <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white">
 <img alt="Vercel AI SDK" src="https://img.shields.io/badge/Vercel_AI_SDK-7.0-000000?style=flat-square&logo=vercel&logoColor=white">
 <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres_+_RLS-3FCF8E?style=flat-square&logo=supabase&logoColor=white">
-<img alt="Tailwind" src="https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white">
 </p>
 
 <p><em>IDEALIZE 2026 — Open Category Prototype</em></p>
