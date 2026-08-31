@@ -16,9 +16,24 @@ import { createLedgerEntry, ledgerEntryInputSchema } from "@/lib/db/ledger";
  * buildToolset() enforces the split; scripts/check-tool-surfaces.ts asserts it.
  *
  * Every tool wraps a db/ function that already validates its input and scopes to the business
- * through RLS, so the schemas below are re-exported rather than restated — a second copy of
- * "price must be >= 0" is a copy that drifts.
+ * through RLS, so the db zod schemas are reused as tool schemas rather than restated — a second
+ * copy of "price must be >= 0" is a copy that drifts.
  */
+
+/**
+ * Two fields need one narrowing before a model can see them. The db schemas accept "" on them so an empty form input coerces to null. As a function
+ * declaration that becomes `anyOf` with `enum: [""]`, which Gemini rejects outright with a 400 —
+ * and because every tool is declared in one request, one bad declaration fails the whole call.
+ * A model omits a field rather than sending "", so the tool-facing shape drops that branch.
+ * Verified against the live API by scripts/check-tool-schemas.mjs.
+ */
+const productToolSchema = productInputSchema.extend({
+  imageUrl: z.string().trim().url().max(2000).nullish(),
+});
+const customerToolSchema = customerInputSchema.extend({
+  email: z.string().trim().email().nullish(),
+});
+
 export function createOwnerTools() {
   /* ── Reads the write tools depend on ──────────────────────────────────
      Nothing else can resolve a customer by name or find an invoice number, so without these
@@ -77,7 +92,7 @@ export function createOwnerTools() {
 
   const addProduct = tool({
     description: "Add a new product to the catalog. Ask for the price before calling this — never guess one.",
-    inputSchema: productInputSchema,
+    inputSchema: productToolSchema,
     execute: async (input) => {
       const product = await createProduct(input);
       return { created: true as const, id: product.id, name: product.name, price: product.price, stockQty: product.stock_qty };
@@ -87,7 +102,7 @@ export function createOwnerTools() {
   const editProduct = tool({
     description:
       "Change fields on an existing product (price, name, sku, reorder level, image, category, supplier). Only pass the fields that change. To change stock use adjustProductStock instead, so the movement is recorded.",
-    inputSchema: z.object({ productId: z.string().uuid(), changes: productInputSchema.partial() }),
+    inputSchema: z.object({ productId: z.string().uuid(), changes: productToolSchema.partial() }),
     execute: async ({ productId, changes }) => {
       const product = await updateProduct(productId, changes);
       return { updated: true as const, id: product.id, name: product.name, price: product.price };
@@ -127,7 +142,7 @@ export function createOwnerTools() {
 
   const addCustomer = tool({
     description: "Create a customer record. A WhatsApp number is required — it is how conversations are matched to a customer.",
-    inputSchema: customerInputSchema,
+    inputSchema: customerToolSchema,
     execute: async (input) => {
       const customer = await createCustomer(input);
       return { created: true as const, id: customer.id, name: customer.name };
@@ -136,7 +151,7 @@ export function createOwnerTools() {
 
   const editCustomer = tool({
     description: "Update a customer's details. Only pass the fields that change.",
-    inputSchema: z.object({ customerId: z.string().uuid(), changes: customerInputSchema.partial() }),
+    inputSchema: z.object({ customerId: z.string().uuid(), changes: customerToolSchema.partial() }),
     execute: async ({ customerId, changes }) => {
       const customer = await updateCustomer(customerId, changes);
       return { updated: true as const, id: customer.id, name: customer.name };

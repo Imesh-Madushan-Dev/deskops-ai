@@ -21,7 +21,7 @@ const TIERS = [
 
 /** What the route falls back to when the client sends no modelId — keep in step with the
  *  copilot route's `tier`, so the label always names the model that will actually run. */
-const ROUTE_DEFAULT_TIER = "thinking";
+const ROUTE_DEFAULT_TIER = "standard";
 
 /**
  * Per-run model choice for the copilot, within the provider the owner picked in

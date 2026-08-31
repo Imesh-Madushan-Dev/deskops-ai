@@ -4,6 +4,7 @@ export type AssistantErrorCode =
   | "no_model"
   | "model_unavailable"
   | "provider_error"
+  | "quota_exhausted"
   | "rate_limited"
   | "offline"
   | "unknown";
@@ -41,6 +42,12 @@ const COPY: Record<AssistantErrorCode, AssistantErrorCopy> = {
     detail: "Usually an invalid key, or you're out of quota.",
     retryable: true,
   },
+  quota_exhausted: {
+    title: "This model is out of quota",
+    detail:
+      "Free Gemini quota is counted per model per day, so another model in the picker beside the message box will still work. Otherwise enable billing on the Google AI Studio project, or try again tomorrow.",
+    retryable: false,
+  },
   rate_limited: {
     title: "Too many requests",
     detail: "You've hit the limit for now. Wait a minute and try again.",
@@ -66,26 +73,49 @@ const STATUS: Record<AssistantErrorCode, number> = {
   no_model: 500,
   model_unavailable: 400,
   provider_error: 502,
+  quota_exhausted: 429,
   rate_limited: 429,
   offline: 503,
   unknown: 500,
 };
 
-/** Server-side: what actually went wrong, as a code. The message text is inspected but never
- *  forwarded — provider errors carry keys and account details in their bodies. */
+/** The SDK retries transient failures and throws an AI_RetryError wrapping the real cause, so
+ *  classifying the outer error alone reports "unknown" for every 429 and 5xx. */
+function rootCause(error: Error): Error {
+  const last = (error as { lastError?: unknown }).lastError;
+  return last instanceof Error ? last : error;
+}
+
+/** Server-side: what actually went wrong, as a code. Prefer the HTTP status the provider actually
+ *  returned over matching its prose — Google says "exceeded your current quota" and links to
+ *  ".../rate-limits", which no reasonable string match catches, and a wrong guess here is what
+ *  tells someone their key is invalid when they are simply out of quota.
+ *  The message text is inspected but never forwarded: provider bodies carry keys and account details. */
 export function classifyAssistantError(error: unknown): AssistantErrorCode {
   if (!(error instanceof Error)) return "unknown";
   // getCurrentBusiness redirects unauthenticated callers; in a route handler that surfaces as a throw.
   const digest = (error as unknown as { digest?: unknown }).digest;
   if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) return "unauthorized";
-  const name = error.name;
-  const message = error.message.toLowerCase();
 
-  if (name === "AI_NoSuchModelError" || message.includes("needs") || message.includes("api key")) return "model_unavailable";
-  if (name === "AI_APICallError" || name === "AI_LoadAPIKeyError") {
-    if (message.includes("rate limit") || message.includes("429")) return "rate_limited";
-    return "provider_error";
+  const cause = rootCause(error);
+  const name = cause.name;
+  const message = cause.message.toLowerCase();
+  const status = (cause as { statusCode?: unknown }).statusCode;
+
+  if (name === "AI_NoSuchModelError") return "model_unavailable";
+  if (name === "AI_LoadAPIKeyError" || message.includes("api key")) return "model_unavailable";
+
+  if (typeof status === "number") {
+    // Out of quota and rate-limited share a status; only the body separates them, and they have
+    // different fixes — switch model or add billing, versus wait a minute.
+    if (status === 429) {
+      return message.includes("quota") || message.includes("resource_exhausted") ? "quota_exhausted" : "rate_limited";
+    }
+    if (status === 401 || status === 403) return "model_unavailable";
+    if (status >= 400) return "provider_error";
   }
+  if (name === "AI_APICallError") return "provider_error";
+
   if (message.includes("not signed in") || message.includes("unauthorized") || message.includes("no business")) return "unauthorized";
   return "unknown";
 }

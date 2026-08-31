@@ -58,6 +58,21 @@ for (const gated of ["requestMarkInvoicePaid", "requestVoidInvoice", "requestReo
   assert.match(execute, /createApproval\(/, `${gated} must queue an approval, not act directly`);
 }
 
+// 6. No tool schema may reach the model with an empty-string literal in a union. The db schemas
+//    use `.or(z.literal(""))` so an empty form field coerces to null; as a function declaration
+//    that becomes anyOf + enum:[""], which Gemini rejects with a 400 - and since every tool is
+//    declared in one request, one bad schema breaks every call. owner.ts narrows those two fields
+//    into productToolSchema / customerToolSchema. Confirmed live by scripts/check-tool-schemas.mjs.
+for (const raw of ["productInputSchema", "customerInputSchema"]) {
+  for (const usage of [`inputSchema: ${raw}`, `changes: ${raw}.partial()`, `items: ${raw}.`]) {
+    assert.ok(
+      !owner.includes(usage),
+      `${raw} is handed to a model as-is ("${usage}"). It contains .or(z.literal("")), which Gemini rejects with a 400 and that fails every tool call. Use the narrowed *ToolSchema.`,
+    );
+  }
+}
+assert.ok(owner.includes("productToolSchema") && owner.includes("customerToolSchema"), "the narrowed tool schemas are gone");
+
 console.log(
   `ok — ${ownerTools.length} owner tools, ${salesTools.length} customer tools, surfaces disjoint, money actions gated`,
 );

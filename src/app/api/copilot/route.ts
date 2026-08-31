@@ -49,9 +49,11 @@ export async function POST(request: Request) {
       message: chat.message,
       history: chat.history,
       surface: "owner",
-      // Books and stock questions are multi-step; the owner is at a desk, not on WhatsApp.
-      // The dock's picker overrides this per run when it names a model in the same provider.
-      tier: "thinking",
+      // Standard, not thinking: the thinking model burns the scarcest per-model daily quota and
+      // was the config that intermittently finished a tool-using run with no answer at all.
+      // It still streams a thought process, and the dock's picker reaches the deeper model in
+      // one click when a question actually needs it.
+      tier: "standard",
       modelId: parsed.data.modelId,
       contextNote: contextNote
         ? `You are chatting with the business owner inside their dashboard (not with a customer). ${contextNote}`
