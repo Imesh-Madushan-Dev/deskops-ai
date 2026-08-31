@@ -27,6 +27,9 @@ for (const [index, provider] of providers.entries()) {
   const ids = [...block.matchAll(/id: "([^"]+)"/g)].map((m) => m[1]);
   assert.equal(ids.length, 3, `${provider}: every model needs an id`);
   for (const id of ids) assert.ok(id.length > 2, `${provider}: empty model id`);
+  // A duplicate id costs the picker a whole tier: two entries collapse to one option and the
+  // tier lookup finds nothing, which renders as an empty model selection.
+  assert.equal(new Set(ids).size, 3, `${provider}: model ids must be unique, got ${ids.join()}`);
 
   const prices = [...block.matchAll(/usd(?:In|Out): ([\d.]+)/g)].map((m) => Number(m[1]));
   assert.equal(prices.length, 6, `${provider}: every model needs usdIn and usdOut for cost_usd`);

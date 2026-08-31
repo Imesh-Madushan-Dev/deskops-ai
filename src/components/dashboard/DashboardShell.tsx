@@ -9,7 +9,6 @@ import type { IconSvgElement } from "@hugeicons/react";
 import {
   AiBrain01Icon,
   ArrowDataTransferHorizontalIcon,
-  BubbleChatIcon,
   ChartLineData01Icon,
   CheckmarkCircle02Icon,
   Home01Icon,
@@ -28,7 +27,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { useRealtimeSync } from "@/lib/query/realtime";
-import { CopilotPanel } from "@/components/copilot/CopilotPanel";
+import { COPILOT_FOCUS_EVENT, CopilotDock } from "@/components/copilot/CopilotDock";
 import { CommandPalette } from "@/components/dashboard/CommandPalette";
 import { ShellContext, StatusPill } from "@/components/dashboard/ui";
 
@@ -134,16 +133,9 @@ function NavContent({ groups, pathname, onNavigate, onOpenPalette }: { groups: N
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: overview } = useDashboardOverview();
-  const [copilotOpen, setCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   useRealtimeSync();
-
-  // Read persisted state after mount so server and first client render agree.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is unavailable during SSR; syncing after mount is the hydration-safe pattern
-    setCopilotOpen(localStorage.getItem("copilot-open") === "true");
-  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -155,11 +147,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  function toggleCopilot(next: boolean) {
-    setCopilotOpen(next);
-    localStorage.setItem("copilot-open", String(next));
-  }
 
   const groups: NavGroup[] = [
     {
@@ -222,20 +209,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
 
-        <div className={cn("lg:pl-64 transition-[padding] duration-200", copilotOpen && "xl:pr-112")}>{children}</div>
+        {/* Bottom padding clears the docked copilot bar so nothing hides behind it. */}
+        <div className="pb-28 lg:pl-64">{children}</div>
 
-        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onOpenCopilot={() => toggleCopilot(true)} />
-        <CopilotPanel open={copilotOpen} onClose={() => toggleCopilot(false)} />
-        {!copilotOpen && (
-          <button
-            type="button"
-            onClick={() => toggleCopilot(true)}
-            aria-label="Open copilot"
-            className="btn-purple fixed right-5 bottom-5 z-30 flex size-12 items-center justify-center rounded-full border-0 shadow-lg transition-transform hover:scale-105"
-          >
-            <HugeiconsIcon icon={BubbleChatIcon} size={20} />
-          </button>
-        )}
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          onOpenCopilot={() => window.dispatchEvent(new Event(COPILOT_FOCUS_EVENT))}
+        />
+        <CopilotDock />
       </div>
     </ShellContext.Provider>
   );

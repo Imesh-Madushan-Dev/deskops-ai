@@ -5,7 +5,7 @@ import { assistantErrorMessage, assistantErrorResponse } from "@/lib/ai/errors";
 import { parseChatMessages } from "@/lib/ai/messages";
 import { checkAgentLimit } from "@/lib/ai/ratelimit";
 
-const requestSchema = z.object({ path: z.string().max(300).optional() });
+const requestSchema = z.object({ path: z.string().max(300).optional(), modelId: z.string().max(120).optional() });
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
@@ -49,7 +49,9 @@ export async function POST(request: Request) {
       message: chat.message,
       history: chat.history,
       // Books and stock questions are multi-step; the owner is at a desk, not on WhatsApp.
+      // The dock's picker overrides this per run when it names a model in the same provider.
       tier: "thinking",
+      modelId: parsed.data.modelId,
       contextNote: contextNote
         ? `You are chatting with the business owner inside their dashboard (not with a customer). ${contextNote}`
         : "You are chatting with the business owner inside their dashboard (not with a customer).",

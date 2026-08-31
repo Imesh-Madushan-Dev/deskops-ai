@@ -38,12 +38,15 @@ export async function runOrchestrator(input: {
   /** Which model the surface needs. WhatsApp customers wait in real time ("fast"); the dashboard
    *  copilot does multi-step analysis and can afford to think. Defaults to the owner's own pick. */
   tier?: ModelTier;
+  /** Per-run model override from the copilot's picker. Validated in resolveModel against the
+   *  business's provider, so an unknown or forged id falls back to the tier. */
+  modelId?: string;
   conversationId?: string;
   chatId?: string;
   businessOverride?: { businessId: string };
 }) {
   const { supabase, business } = await getCurrentBusiness(input.businessOverride);
-  const { model, providerId, modelName, providerOptions, usdIn, usdOut } = resolveModel(business.settings, input.tier);
+  const { model, providerId, modelName, providerOptions, usdIn, usdOut } = resolveModel(business.settings, input.tier, input.modelId);
   const traceId = crypto.randomUUID();
 
   const [grounding, awareness] = await Promise.all([

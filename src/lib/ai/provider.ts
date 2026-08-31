@@ -44,8 +44,8 @@ export const PROVIDER_CATALOG = {
         usdOut: 0.4,
       },
       {
-        id: "gemini-3.7-flash",
-        label: "Gemini 3.7 Flash",
+        id: "gemini-3.6-flash",
+        label: "Gemini 3.6 Flash",
         tier: "standard",
         providerOptions: { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } },
         usdIn: 0.3,
@@ -53,10 +53,10 @@ export const PROVIDER_CATALOG = {
       },
       {
         // Not Pro: gemini-3.1-pro-preview has a free-tier quota of literally 0, so a project
-        // without billing 429s on every copilot run. Same family, thinking dialled up instead.
+        // without billing 429s on every copilot run. The newest flash, thinking dialled up.
         // Swap to "gemini-3.1-pro-preview" (usdIn 1.25 / usdOut 10) once billing is enabled.
         id: "gemini-3.7-flash",
-        label: "Gemini 3.7 Flash (deep)",
+        label: "Gemini 3.7 Flash",
         tier: "thinking",
         providerOptions: { google: { thinkingConfig: { thinkingLevel: "high", includeThoughts: true } } },
         usdIn: 0.3,
@@ -104,8 +104,7 @@ export const PROVIDER_CATALOG = {
     models: [
       { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B", tier: "fast", usdIn: 0.59, usdOut: 0.79 },
       { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", tier: "standard", usdIn: 0.15, usdOut: 0.75 },
-      // Groq has no thinking-class model; the standard one doubles up so every tier resolves.
-      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", tier: "thinking", usdIn: 0.15, usdOut: 0.75 },
+      { id: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 70B", tier: "thinking", usdIn: 0.75, usdOut: 0.99 },
     ],
   },
 } as const satisfies Record<string, { label: string; envKey: string; models: readonly ModelDef[] }>;
@@ -120,14 +119,10 @@ export function providerHasKey(id: ProviderId) {
   return Boolean(process.env[PROVIDER_CATALOG[id].envKey]);
 }
 
-/** The models a provider offers, deduped by id — groq lists one model under two tiers. */
+/** The models a provider offers, one per tier. Ids are unique within a provider — a duplicate
+ *  silently costs the picker a tier, so scripts/check-model-catalog.ts asserts it. */
 export function providerModels(id: ProviderId): ModelDef[] {
-  const seen = new Set<string>();
-  return (PROVIDER_CATALOG[id].models as readonly ModelDef[]).filter((model) => {
-    if (seen.has(model.id)) return false;
-    seen.add(model.id);
-    return true;
-  });
+  return [...(PROVIDER_CATALOG[id].models as readonly ModelDef[])];
 }
 
 export function providerModelIds(id: ProviderId): string[] {
@@ -161,10 +156,15 @@ export function resolveModelSelection(settings: unknown): { providerId: Provider
 
 /** Resolves the model for a surface. "standard" honours the owner's saved pick; "fast" and
  *  "thinking" take the provider's model for that tier — the owner chose a provider, not a
- *  latency profile for every surface at once. */
+ *  latency profile for every surface at once.
+ *
+ *  `modelId` is a per-run override from the copilot's picker. It comes from the client, so it
+ *  only wins when it names a model in the business's own provider catalog — otherwise the tier
+ *  applies and a forged id is simply ignored. */
 export function resolveModel(
   settings: unknown,
   tier: ModelTier = "standard",
+  modelId?: string,
 ): {
   model: LanguageModel;
   providerId: ProviderId;
@@ -176,10 +176,12 @@ export function resolveModel(
   const selection = resolveModelSelection(settings);
   const { providerId } = selection;
   const models = PROVIDER_CATALOG[providerId].models as readonly ModelDef[];
+  const requested = modelId ? models.find((model) => model.id === modelId) : undefined;
   const def =
-    tier === "standard"
+    requested ??
+    (tier === "standard"
       ? models.find((model) => model.id === selection.modelName) ?? modelForTier(providerId, "standard")
-      : modelForTier(providerId, tier);
+      : modelForTier(providerId, tier));
 
   return {
     model: instantiate(providerId)(def.id),
