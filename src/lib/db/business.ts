@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getCurrentBusiness } from "@/lib/db/auth";
-import { PROVIDER_CATALOG, isProviderId } from "@/lib/ai/provider";
+import { PROVIDER_CATALOG, isProviderId, providerModelIds } from "@/lib/ai/provider";
 import type { Json } from "@/types/database";
 
 export const businessInputSchema = z.object({
@@ -27,7 +27,7 @@ export async function updateBusiness(input: BusinessInput) {
 
     if (input.aiProvider !== undefined) {
       if (!isProviderId(input.aiProvider)) throw new Error("Unknown AI provider.");
-      const models: readonly string[] = PROVIDER_CATALOG[input.aiProvider].models;
+      const models = providerModelIds(input.aiProvider);
       const model = input.aiModel && models.includes(input.aiModel) ? input.aiModel : models[0];
       settingsUpdate.ai = { provider: input.aiProvider, model };
     }

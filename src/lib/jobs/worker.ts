@@ -101,7 +101,8 @@ async function processJob(job: { business_id: string; job_type: string; payload:
       ? `${whatsappStyle}\n\nYou are chatting with an existing customer "${contactLabel(conv.customers)}" (customer id ${conv.customer_id}). Never ask them for their WhatsApp number — use this customer id directly for any invoice.`
       : whatsappStyle;
 
-    const result = await runOrchestrator({ ...payload, history, contextNote, businessOverride: { businessId: job.business_id } });
+    // A customer is waiting on WhatsApp — the fast tier, not whatever the owner picked for the copilot.
+    const result = await runOrchestrator({ ...payload, history, contextNote, tier: "fast", businessOverride: { businessId: job.business_id } });
     const reply = (await result.text).trim();
 
     // Auto-send invoices the agent just drafted, if the owner enabled it. The invoice body already

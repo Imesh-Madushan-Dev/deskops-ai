@@ -1,0 +1,127 @@
+{
+  "$comment": "Image generation prompts for the Deskops AI semi-finals pitch deck (13 slides, 10 images). One art direction across all ten so they read as a single commissioned set. No text is generated inside any image - the slide typography carries every word.",
+  "deck": "Deskops AI - IDEALIZE 2026 Open Category, Team ONYX",
+  "image_count": 10,
+  "covers_slides": "01-13",
+
+  "art_direction": {
+    "why_photography": "Every alternative (flat vector, isometric 3D, AI diagram illustration) looks generated and fights the deck's editorial layout. Real objects from the shop owner's own world stand for the abstract ideas instead, and photographs never try to render text.",
+    "medium": "quiet documentary photograph, 50mm prime lens, natural available light, no flash",
+    "subject_world": "a small independent retail shop and home business in Sri Lanka - shelves, cardboard, twine, a ledger book, a phone always within reach",
+    "treatment": "desaturated and slightly cool, warm window light, shallow depth of field, honest and unstyled - lived-in, not a product shoot",
+    "palette_anchor": "bone white #F3F4EF, deep shop-sign green #1E6B49, amber #B46A12 reserved for the approval-gate image only, near-black ink #0E1512",
+    "composition_rule": "always leave one third of the frame as quiet negative space (wall, counter surface, or shadow) for slide text to sit over",
+    "people_rule": "hands and shoulders only, never a recognisable face - keeps the deck about the work, avoids likeness issues",
+    "consistency_tip": "generate all ten in one session with the same seed family, or feed image 01 back as a style reference for the other nine"
+  },
+
+  "shared_negative_prompt": "text, letters, words, numbers, signage, logos, watermarks, UI screenshots, readable phone screen, charts, graphs, infographic, arrows, icons, 3d render, cgi, illustration, vector art, flat design, cartoon, stock-photo smile, recognisable face, oversaturated, HDR, neon, purple gradient, blue tech glow, lens flare, cluttered composition",
+
+  "default_params": {
+    "aspect_ratio": "16:9",
+    "quality": "high",
+    "style_strength": "photographic realism",
+    "note": "prompts are written model-agnostic - they work as-is in Midjourney, Imagen, Flux, DALL-E or Nano Banana. For Midjourney append --style raw --ar 16:9"
+  },
+
+  "images": [
+    {
+      "id": "01-hero",
+      "slides": ["01 Title", "13 Close"],
+      "stands_for": "the owner and the phone that never stops - the whole thesis in one frame",
+      "placement": "full-bleed background behind the wordmark, darkened to 35% opacity so white type holds",
+      "aspect_ratio": "16:9",
+      "prompt": "A small shop counter photographed from a low three-quarter angle in late afternoon window light. A smartphone lies face-up on the worn wooden counter, its screen glowing softly but illegibly, beside a thick hand-ruled ledger book left open and a stub of pencil. Behind it, deeply out of focus, the packed shelves of a small retail shop recede into warm shadow. The right third of the frame is empty counter and shadow. Desaturated, cool bone-white highlights, deep green shelving barely visible in the blur. Quiet documentary photograph, 50mm, shallow depth of field, natural light only.",
+      "alt": "A phone glowing on a shop counter beside an open ledger book, packed shelves blurred behind."
+    },
+    {
+      "id": "02-problem",
+      "slides": ["02 The Problem"],
+      "stands_for": "the interruption - being pulled to the phone while the shop waits",
+      "placement": "right column panel beside the WhatsApp message bubbles",
+      "aspect_ratio": "4:5",
+      "prompt": "Close photograph of a shopkeeper's hands holding a smartphone at chest height, thumb mid-typing, the screen turned away from camera so nothing on it is readable. The person is standing in a narrow shop aisle; unopened cardboard boxes and half-stocked shelves crowd the frame around them, slightly out of focus. Only forearms and torso visible, no face. Soft daylight from the shop entrance behind. Desaturated, warm shadows, faint green tone in the shelving. Quiet documentary photograph, 50mm, shallow depth of field.",
+      "alt": "Hands typing on a phone in a narrow shop aisle, unopened boxes waiting on the shelves around them."
+    },
+    {
+      "id": "03-wedge",
+      "slides": ["03 Why The Obvious Fix Fails"],
+      "stands_for": "the real number lives on the shelf - it has to be looked up, never guessed",
+      "placement": "narrow banner across the top, or a small square inset beside the two comparison panels",
+      "aspect_ratio": "3:2",
+      "prompt": "Extreme close macro photograph of a small blank cardboard price tag tied with rough twine to the handle of a plain ceramic mug on a shop shelf. The tag is turned very slightly away so its surface is clean and empty. The mug and shelf edge are sharp; the rest of the shelf falls into deep soft blur. Dust visible in a single shaft of window light. Desaturated bone and grey tones with one muted deep-green object far out of focus behind. Documentary macro photograph, 50mm, very shallow depth of field, natural light.",
+      "alt": "A blank cardboard price tag tied to a ceramic mug on a shop shelf, shot in macro."
+    },
+    {
+      "id": "04-solution",
+      "slides": ["04 The Solution"],
+      "stands_for": "the five steps - reads, grounds, reasons, stops, records - as an ordered sequence",
+      "placement": "thin full-width strip under the headline, above the five numbered columns",
+      "aspect_ratio": "21:9",
+      "prompt": "Directly overhead flat-lay photograph of a shop counter, five objects laid out in a single evenly spaced horizontal row on bare worn wood: a smartphone face-down, a small hardbound catalog book, a folded paper invoice pad, a wooden rubber stamp resting on its side, and a closed metal cash tin. Nothing overlaps; the spacing is deliberate and even. Soft diffuse overhead daylight, long soft shadows falling in one direction. Desaturated bone, brown and grey palette. Documentary flat-lay photograph, even focus across the row.",
+      "alt": "Five shop objects laid out in an even row on a counter, shot from directly overhead."
+    },
+    {
+      "id": "05-worked-example",
+      "slides": ["05 One Message, End To End"],
+      "stands_for": "the literal example on the slide - twenty ceramic mugs, a real thing on a real shelf",
+      "placement": "background behind the tool trace at low opacity, or a tall panel on the far right",
+      "aspect_ratio": "4:5",
+      "prompt": "A neat stack of plain unglazed ceramic mugs on a metal shop shelf, arranged in two tidy columns, with one single mug pulled forward to the shelf edge and sharply in focus. A bare warm shop bulb lights them from above and slightly left; the shelf recedes into cool shadow. No labels, no branding, no price tags. Desaturated bone-white ceramic against dark green-grey shelving. Quiet documentary photograph, 50mm, shallow depth of field.",
+      "alt": "A stack of plain ceramic mugs on a shop shelf with one pulled forward into the light."
+    },
+    {
+      "id": "06-architecture",
+      "slides": ["06 How It Is Built"],
+      "stands_for": "a structured system - everything has one place, and you can always find it again",
+      "placement": "faint full-bleed background at 12% opacity behind the flow diagram",
+      "aspect_ratio": "16:9",
+      "prompt": "A wall of old wooden pigeonhole storage drawers in a shop back room, photographed straight on so the grid fills the frame edge to edge. Every compartment is empty of visible markings, worn smooth by handling. One drawer near the centre is pulled slightly open. Even soft light from the left, deep shadow inside the open compartment. Desaturated warm brown and grey, one drawer front painted a faded deep green. Documentary architectural photograph, sharp across the grid, natural light.",
+      "alt": "A wall grid of worn wooden pigeonhole drawers with one pulled slightly open."
+    },
+    {
+      "id": "07-tools",
+      "slides": ["07 What The Agent Can Actually Do", "09 Status"],
+      "stands_for": "ten real tools - worn, specific, each with one job, none of them decorative",
+      "placement": "full-width strip under the headline, above the four tool columns",
+      "aspect_ratio": "21:9",
+      "prompt": "Directly overhead flat-lay of ten well-used small shop implements arranged in a loose grid on a bare bone-white surface: brass scale weights, a receipt spike, a wooden stamp, scissors, a ball of twine, a bulldog clip, a metal ruler, a pencil stub, a rubber band roll, a small brass key. Every object worn and genuinely used, none new. Even diffuse daylight, soft short shadows. Desaturated brass, steel and bone tones. Documentary flat-lay photograph, even focus, no styling.",
+      "alt": "Ten worn shop implements laid out in a grid on a pale surface, shot from overhead."
+    },
+    {
+      "id": "08-approval-gate",
+      "slides": ["08 Guardrails And Responsible AI"],
+      "stands_for": "the pause before it becomes real - the human hand that has not yet pressed down. This is the deck's strongest image, give it the most attention.",
+      "placement": "right column, beside the seven-guardrail table - the only image carrying amber",
+      "aspect_ratio": "4:5",
+      "prompt": "A hand holding a wooden rubber stamp suspended a few centimetres above a paper invoice on a desk, the moment before it is pressed down. The stamp face is turned away and unreadable. The paper is blank and slightly curled. Warm amber lamplight rakes across the desk from the right, throwing a long soft shadow of the stamp onto the page. Only the hand and forearm are visible. Everything else falls into deep quiet shadow. Amber and deep ink tones, bone-white paper. Quiet documentary photograph, 50mm, shallow depth of field, single warm light source.",
+      "alt": "A hand holding a stamp suspended just above a blank invoice, lit by warm lamplight."
+    },
+    {
+      "id": "09-market",
+      "slides": ["10 Market Feasibility", "11 Business Model"],
+      "stands_for": "the market is not a projection - it is a street full of these shops, and they already exist",
+      "placement": "full-bleed background at 20% opacity behind the TAM/SAM/SOM bars",
+      "aspect_ratio": "16:9",
+      "prompt": "A row of small independent shopfronts along a narrow street at dusk, photographed from across the road at a slight angle so the row recedes to the right. Roller shutters half down on some, warm interior light spilling from others onto the pavement. No readable signage - signs are blurred by distance and low light. Motorcycles and stacked goods on the pavement. Blue-grey dusk sky above, warm amber pools of light below. Desaturated, one faded green shopfront mid-frame. Quiet documentary street photograph, natural light only.",
+      "alt": "A row of small independent shopfronts at dusk, warm light spilling onto the pavement."
+    },
+    {
+      "id": "10-scalability",
+      "slides": ["12 Future Scalability"],
+      "stands_for": "a new business is a row, not a deployment - identical units, repeating without effort",
+      "placement": "full-bleed background at 12% opacity behind the three columns and the timeline",
+      "aspect_ratio": "16:9",
+      "prompt": "Long shop shelving photographed straight down its length in strong one-point perspective, identical empty bone-white storage bins repeating along both sides and converging toward a small bright opening far in the distance. Even overhead light down the aisle, the nearest bins sharp and the far end softening into haze. No labels, no contents, no people. Desaturated bone, grey and faint green tones. Quiet documentary photograph, wide angle, deep focus.",
+      "alt": "A long shop aisle of identical empty storage bins receding into the distance."
+    }
+  ],
+
+  "usage_notes": [
+    "Generate 01-hero first and lock its look. Feed it back as a style reference for the other nine so the set stays coherent.",
+    "Every background image needs an ink or bone overlay before slide text goes on top - the opacity is given per image in the placement field.",
+    "If a model still renders text into an image, regenerate rather than retouch. Any stray lettering will read as a mistake to judges.",
+    "Save output as WebP or JPEG at roughly 1600px on the long edge and inline them as data URIs, or the deck will not print with images.",
+    "Images 06, 09 and 10 are backgrounds and can be pushed further out of focus if the slide text is hard to read over them."
+  ]
+}

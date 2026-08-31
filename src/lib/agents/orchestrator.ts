@@ -1,14 +1,33 @@
 import "server-only";
 
 import { stepCountIs, streamText, type ModelMessage } from "ai";
-import { resolveModel } from "@/lib/ai/provider";
+import { resolveModel, type ModelTier } from "@/lib/ai/provider";
 import { buildToolset } from "@/lib/tools";
 import { orchestratorSystemPrompt } from "@/lib/agents/prompts/orchestrator";
 import { retrieveContext } from "@/lib/rag/retrieve";
 import { getCurrentBusiness } from "@/lib/db/auth";
 import { truncateForModel } from "@/lib/ai/guardrails";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const MAX_STEPS = 6;
+
+/** Facts the model would otherwise burn a tool call to learn. Three counted head-queries against
+ *  indexed columns — cheap enough to run on the WhatsApp path too. Failures are non-fatal: a
+ *  missing context block costs a tool call, a thrown error costs the whole run. */
+async function buildAwareness(supabase: SupabaseClient, businessId: string) {
+  const count = { count: "exact" as const, head: true };
+  const [openChats, pendingApprovals, outOfStock] = await Promise.all([
+    supabase.from("conversations").select("id", count).eq("business_id", businessId).eq("status", "open"),
+    supabase.from("approvals").select("id", count).eq("business_id", businessId).eq("status", "pending"),
+    supabase.from("products").select("id", count).eq("business_id", businessId).eq("stock_qty", 0),
+  ]);
+
+  return [
+    `Open customer conversations: ${openChats.count ?? 0}`,
+    `Actions waiting on the owner's approval: ${pendingApprovals.count ?? 0}`,
+    `Products currently out of stock: ${outOfStock.count ?? 0}`,
+  ].join("\n");
+}
 
 export async function runOrchestrator(input: {
   message: string;
@@ -16,32 +35,48 @@ export async function runOrchestrator(input: {
   history?: ModelMessage[];
   /** Extra system-prompt line, e.g. what dashboard page the owner is currently viewing. */
   contextNote?: string;
+  /** Which model the surface needs. WhatsApp customers wait in real time ("fast"); the dashboard
+   *  copilot does multi-step analysis and can afford to think. Defaults to the owner's own pick. */
+  tier?: ModelTier;
   conversationId?: string;
   chatId?: string;
   businessOverride?: { businessId: string };
 }) {
   const { supabase, business } = await getCurrentBusiness(input.businessOverride);
-  const { model, providerId, modelName } = resolveModel(business.settings);
+  const { model, providerId, modelName, providerOptions, usdIn, usdOut } = resolveModel(business.settings, input.tier);
+  const traceId = crypto.randomUUID();
 
-  const grounding = await retrieveContext(input.message, 6, input.businessOverride).catch(() => []);
+  const [grounding, awareness] = await Promise.all([
+    retrieveContext(input.message, 6, input.businessOverride).catch(() => []),
+    buildAwareness(supabase, business.id).catch(() => null),
+  ]);
   const context = grounding.length
     ? `\n\nRelevant business context:\n${grounding.map((g) => `- (${g.source}) ${truncateForModel(g.content, 500)}`).join("\n")}`
     : "";
   const note = input.contextNote ? `\n\n${input.contextNote}` : "";
+  const facts = awareness
+    ? `\n\n<context>\n${awareness}\n</context>\nEverything in <context> is already true — never re-read it with a tool.`
+    : "";
 
   const result = streamText({
     model,
-    system: orchestratorSystemPrompt(business) + note + context,
+    providerOptions,
+    system: orchestratorSystemPrompt(business) + note + facts + context,
     messages: [...(input.history ?? []), { role: "user", content: input.message }],
     tools: buildToolset({ conversationId: input.conversationId, chatId: input.chatId, businessOverride: input.businessOverride }),
     stopWhen: stepCountIs(MAX_STEPS),
     onFinish: async ({ usage }) => {
+      const inputTokens = usage.inputTokens ?? 0;
+      const outputTokens = usage.outputTokens ?? 0;
       await supabase.from("model_usage").insert({
         business_id: business.id,
+        trace_id: traceId,
         provider: providerId,
         model: modelName,
-        input_tokens: usage.inputTokens ?? 0,
-        output_tokens: usage.outputTokens ?? 0,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        // Reasoning tokens bill at the output rate and the SDK already folds them into outputTokens.
+        cost_usd: (inputTokens * usdIn + outputTokens * usdOut) / 1_000_000,
       });
     },
   });

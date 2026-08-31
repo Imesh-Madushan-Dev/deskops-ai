@@ -11,6 +11,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { contactLabel } from "@/lib/utils/contact";
 import { useConversation, useConversations, useSendOwnerMessage, type Message } from "@/lib/query/conversations";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { describeAssistantError } from "@/lib/ai/errors";
+import { AgentMessageParts } from "@/components/copilot/AgentMessage";
 import { EmptyState, FilterChips, InitialsAvatar, PageShell, relativeTime, SearchField, StatusPill } from "@/components/dashboard/ui";
 
 type StatusFilter = "all" | "open" | "snoozed" | "closed";
@@ -95,15 +99,19 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
   const { data: conversation, isLoading } = useConversation(conversationId);
   const sendMessage = useSendOwnerMessage(conversationId);
   const [draft, setDraft] = useState("");
-  const [agentReply, setAgentReply] = useState("");
-  const [agentRunning, setAgentRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messageCount = conversation?.messages.length ?? 0;
 
+  // The agent draft is a one-shot ask, not a thread — only the newest assistant turn is shown.
+  const agent = useChat({ transport: new DefaultChatTransport({ api: "/api/agent/run", body: { conversationId } }) });
+  const agentRunning = agent.status === "submitted" || agent.status === "streaming";
+  const agentReply = [...agent.messages].reverse().find((m) => m.role === "assistant");
+  const agentError = describeAssistantError(agent.error, typeof navigator !== "undefined" && !navigator.onLine);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messageCount, agentReply]);
+  }, [messageCount, agent.messages]);
 
   async function sendOwnerReply() {
     if (!draft.trim()) return;
@@ -116,30 +124,10 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
     }
   }
 
-  async function askAgent() {
-    if (!draft.trim()) return;
+  function askAgent() {
+    if (!draft.trim() || agentRunning) return;
     setError(null);
-    setAgentRunning(true);
-    setAgentReply("");
-    try {
-      const response = await fetch("/api/agent/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, message: draft }),
-      });
-      if (!response.ok || !response.body) throw new Error((await response.json().catch(() => null))?.error ?? "Agent run failed");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setAgentReply((prev) => prev + decoder.decode(value, { stream: true }));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Agent run failed.");
-    } finally {
-      setAgentRunning(false);
-    }
+    void agent.sendMessage({ text: draft });
   }
 
   if (isLoading) return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>;
@@ -177,16 +165,25 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
             {group.messages.map((message) => <Bubble key={message.id} message={message} />)}
           </div>
         ))}
-        {agentReply && (
+        {(agentReply || agentRunning) && (
           <div className="rounded-xl border border-primary/30 bg-primary/[0.04] p-3.5">
             <div className="flex items-center gap-2"><HugeiconsIcon icon={AiBrain01Icon} size={15} className="text-primary" /><Badge variant="secondary" className="text-[11px]">Agent notes</Badge></div>
-            <p className="mt-2 text-sm leading-6 whitespace-pre-wrap">{agentReply}</p>
+            <div className="mt-2">
+              {agentReply
+                ? <AgentMessageParts message={agentReply} streaming={agentRunning} />
+                : <span className="t-shimmer text-sm" data-text="Thinking…">Thinking…</span>}
+            </div>
           </div>
         )}
       </div>
 
       <div className="border-t border-border/60 p-3.5">
         {error && <p role="alert" className="mb-2 text-sm text-destructive">{error}</p>}
+        {agentError && (
+          <p role="alert" className="mb-2 text-sm text-destructive">
+            <span className="font-medium">{agentError.title}</span> {agentError.detail}
+          </p>
+        )}
         <div className="flex items-end gap-2">
           <Textarea
             placeholder="Type a reply… (Enter to send, Shift+Enter for newline)"

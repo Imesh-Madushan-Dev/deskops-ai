@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,8 @@ export default function ModelsSettingsPage() {
 
   const providerId = selectedProvider ?? info.current.providerId;
   const provider = info.providers.find((p) => p.id === providerId) ?? info.providers[0];
-  const model = selectedModel && provider.models.includes(selectedModel) ? selectedModel : (providerId === info.current.providerId ? info.current.modelName : provider.models[0]);
+  const modelIds = provider.models.map((m) => m.id);
+  const model = selectedModel && modelIds.includes(selectedModel) ? selectedModel : (providerId === info.current.providerId ? info.current.modelName : modelIds[0]);
   const dirty = providerId !== info.current.providerId || model !== info.current.modelName;
 
   async function save() {
@@ -47,7 +48,7 @@ export default function ModelsSettingsPage() {
       <Card className="border-border/80">
         <CardContent className="p-6">
           <p className="text-sm font-medium">Chat model</p>
-          <p className="mt-1 text-sm text-muted-foreground">Pick which provider and model powers your agents. API keys are configured in the server environment.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Pick which provider powers your agents. API keys are configured in the server environment.</p>
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {info.providers.map((p) => {
@@ -74,10 +75,23 @@ export default function ModelsSettingsPage() {
           </div>
 
           <div className="mt-4 max-w-sm space-y-1.5">
-            <label htmlFor="model" className="text-sm font-medium">Model</label>
-            <NativeSelect id="model" value={model} onChange={(event) => setSelectedModel(event.target.value)} className="w-full">
-              {provider.models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </NativeSelect>
+            <p id="model-label" className="text-sm font-medium">Everyday model</p>
+            <Select value={model} onValueChange={setSelectedModel}>
+              <SelectTrigger id="model" aria-labelledby="model-label" className="w-full">
+                <SelectValue placeholder="Choose a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {provider.models.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label} <span className="text-muted-foreground">· {m.tier}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used for everyday runs. WhatsApp replies always use this provider&apos;s fastest model, and the dashboard copilot its
+              deepest-thinking one, so customers never wait on a long think.
+            </p>
           </div>
 
           {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}

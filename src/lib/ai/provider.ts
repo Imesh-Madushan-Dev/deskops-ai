@@ -6,30 +6,109 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createGroq } from "@ai-sdk/groq";
 import type { LanguageModel } from "ai";
 
+/** Which surface is asking. The owner picks one provider (and their preferred everyday model);
+ *  each call site picks the tier it needs within that provider — WhatsApp customers wait in real
+ *  time, the dashboard copilot can afford to think. */
+export type ModelTier = "fast" | "standard" | "thinking";
+
+/** Provider options cross the wire as JSON, so `unknown` won't do. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+type ModelDef = {
+  id: string;
+  label: string;
+  tier: ModelTier;
+  /** Passed straight to streamText. Absent = this model does no extended thinking. */
+  providerOptions?: Record<string, Record<string, JsonValue>>;
+  /** USD per 1M tokens, for model_usage.cost_usd. Reasoning tokens bill at the output rate. */
+  usdIn: number;
+  usdOut: number;
+};
+
 /** Provider catalog: what the settings UI offers and what resolveModel accepts.
- *  API keys stay in env — users pick provider/model, never paste keys into the app. */
+ *  API keys stay in env — users pick provider/model, never paste keys into the app.
+ *  Every provider declares exactly one model per tier; that invariant is what lets each
+ *  surface ask for a tier without adding a second owner-facing setting. */
 export const PROVIDER_CATALOG = {
   google: {
     label: "Google Gemini",
     envKey: "GEMINI_API_KEY",
-    models: ["gemini-3.1-flash-lite"],
+    models: [
+      {
+        id: "gemini-3.5-flash-lite",
+        label: "Gemini 3.5 Flash Lite",
+        tier: "fast",
+        // Cheapest tier still reasons a little; thoughts stay off to keep WhatsApp snappy.
+        providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } },
+        usdIn: 0.1,
+        usdOut: 0.4,
+      },
+      {
+        id: "gemini-3.7-flash",
+        label: "Gemini 3.7 Flash",
+        tier: "standard",
+        providerOptions: { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } },
+        usdIn: 0.3,
+        usdOut: 2.5,
+      },
+      {
+        // Not Pro: gemini-3.1-pro-preview has a free-tier quota of literally 0, so a project
+        // without billing 429s on every copilot run. Same family, thinking dialled up instead.
+        // Swap to "gemini-3.1-pro-preview" (usdIn 1.25 / usdOut 10) once billing is enabled.
+        id: "gemini-3.7-flash",
+        label: "Gemini 3.7 Flash (deep)",
+        tier: "thinking",
+        providerOptions: { google: { thinkingConfig: { thinkingLevel: "high", includeThoughts: true } } },
+        usdIn: 0.3,
+        usdOut: 2.5,
+      },
+    ],
   },
   openai: {
     label: "OpenAI",
     envKey: "OPENAI_API_KEY",
-    models: ["gpt-5-mini", "gpt-5", "gpt-5-nano"],
+    models: [
+      { id: "gpt-5-nano", label: "GPT-5 Nano", tier: "fast", usdIn: 0.05, usdOut: 0.4 },
+      { id: "gpt-5.2", label: "GPT-5.2", tier: "standard", usdIn: 1.25, usdOut: 10 },
+      {
+        id: "gpt-5.2-pro",
+        label: "GPT-5.2 Pro",
+        tier: "thinking",
+        providerOptions: { openai: { reasoningEffort: "high", reasoningSummary: "auto" } },
+        usdIn: 15,
+        usdOut: 120,
+      },
+    ],
   },
   anthropic: {
     label: "Anthropic Claude",
     envKey: "ANTHROPIC_API_KEY",
-    models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5-20251001"],
+    models: [
+      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", tier: "fast", usdIn: 1, usdOut: 5 },
+      { id: "claude-sonnet-5", label: "Sonnet 5", tier: "standard", usdIn: 3, usdOut: 15 },
+      {
+        id: "claude-opus-5",
+        label: "Opus 5",
+        tier: "thinking",
+        // 'adaptive' lets the model decide how long to think; 'summarized' is what makes the
+        // reasoning stream back at all — 'omitted' thinks but sends nothing to render.
+        providerOptions: { anthropic: { thinking: { type: "adaptive", display: "summarized" } } },
+        usdIn: 5,
+        usdOut: 25,
+      },
+    ],
   },
   groq: {
     label: "Groq",
     envKey: "GROQ_API_KEY",
-    models: ["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "openai/gpt-oss-20b"],
+    models: [
+      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B", tier: "fast", usdIn: 0.59, usdOut: 0.79 },
+      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", tier: "standard", usdIn: 0.15, usdOut: 0.75 },
+      // Groq has no thinking-class model; the standard one doubles up so every tier resolves.
+      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", tier: "thinking", usdIn: 0.15, usdOut: 0.75 },
+    ],
   },
-} as const;
+} as const satisfies Record<string, { label: string; envKey: string; models: readonly ModelDef[] }>;
 
 export type ProviderId = keyof typeof PROVIDER_CATALOG;
 
@@ -39,6 +118,26 @@ export function isProviderId(value: unknown): value is ProviderId {
 
 export function providerHasKey(id: ProviderId) {
   return Boolean(process.env[PROVIDER_CATALOG[id].envKey]);
+}
+
+/** The models a provider offers, deduped by id — groq lists one model under two tiers. */
+export function providerModels(id: ProviderId): ModelDef[] {
+  const seen = new Set<string>();
+  return (PROVIDER_CATALOG[id].models as readonly ModelDef[]).filter((model) => {
+    if (seen.has(model.id)) return false;
+    seen.add(model.id);
+    return true;
+  });
+}
+
+export function providerModelIds(id: ProviderId): string[] {
+  return providerModels(id).map((model) => model.id);
+}
+
+function modelForTier(id: ProviderId, tier: ModelTier): ModelDef {
+  const models = PROVIDER_CATALOG[id].models as readonly ModelDef[];
+  // The catalog guarantees one per tier; the fallback is a safety net, not a code path.
+  return models.find((model) => model.tier === tier) ?? models[0];
 }
 
 function instantiate(id: ProviderId) {
@@ -55,14 +154,41 @@ export function resolveModelSelection(settings: unknown): { providerId: Provider
   const ai = (settings as { ai?: { provider?: unknown; model?: unknown } } | null)?.ai;
   const envDefault = isProviderId(process.env.AI_PROVIDER) ? process.env.AI_PROVIDER : "google";
   const providerId = isProviderId(ai?.provider) && providerHasKey(ai.provider) ? ai.provider : envDefault;
-  const catalog: readonly string[] = PROVIDER_CATALOG[providerId].models;
-  const modelName = typeof ai?.model === "string" && ai.provider === providerId && catalog.includes(ai.model) ? ai.model : catalog[0];
-  return { providerId, modelName };
+  const catalog = providerModelIds(providerId);
+  const saved = typeof ai?.model === "string" && ai.provider === providerId && catalog.includes(ai.model) ? ai.model : null;
+  return { providerId, modelName: saved ?? modelForTier(providerId, "standard").id };
 }
 
-export function resolveModel(settings: unknown): { model: LanguageModel; providerId: ProviderId; modelName: string } {
-  const { providerId, modelName } = resolveModelSelection(settings);
-  return { model: instantiate(providerId)(modelName), providerId, modelName };
+/** Resolves the model for a surface. "standard" honours the owner's saved pick; "fast" and
+ *  "thinking" take the provider's model for that tier — the owner chose a provider, not a
+ *  latency profile for every surface at once. */
+export function resolveModel(
+  settings: unknown,
+  tier: ModelTier = "standard",
+): {
+  model: LanguageModel;
+  providerId: ProviderId;
+  modelName: string;
+  providerOptions?: Record<string, Record<string, JsonValue>>;
+  usdIn: number;
+  usdOut: number;
+} {
+  const selection = resolveModelSelection(settings);
+  const { providerId } = selection;
+  const models = PROVIDER_CATALOG[providerId].models as readonly ModelDef[];
+  const def =
+    tier === "standard"
+      ? models.find((model) => model.id === selection.modelName) ?? modelForTier(providerId, "standard")
+      : modelForTier(providerId, tier);
+
+  return {
+    model: instantiate(providerId)(def.id),
+    providerId,
+    modelName: def.id,
+    providerOptions: def.providerOptions,
+    usdIn: def.usdIn,
+    usdOut: def.usdOut,
+  };
 }
 
 /** Embeddings stay on Gemini regardless of the chat provider — embeddings.embedding is fixed at vector(768) to match it. */

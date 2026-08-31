@@ -8,7 +8,7 @@ export type TeamMember = { user_id: string; role: "owner" | "admin" | "staff"; c
 export type ModelInfo = {
   current: { providerId: string; modelName: string };
   embeddingModel: string;
-  providers: { id: string; label: string; models: string[]; hasKey: boolean }[];
+  providers: { id: string; label: string; models: { id: string; label: string; tier: "fast" | "standard" | "thinking" }[]; hasKey: boolean }[];
   usage: {
     sinceDays: number;
     requests: number;

@@ -1,15 +1,11 @@
-import { createTextStreamResponse, toTextStream, type ModelMessage } from "ai";
 import { z } from "zod";
 import { runOrchestrator } from "@/lib/agents/orchestrator";
 import { getCurrentBusiness } from "@/lib/db/auth";
+import { assistantErrorMessage, assistantErrorResponse } from "@/lib/ai/errors";
+import { parseChatMessages } from "@/lib/ai/messages";
+import { checkAgentLimit } from "@/lib/ai/ratelimit";
 
-const requestSchema = z.object({
-  messages: z
-    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) }))
-    .min(1)
-    .max(40),
-  path: z.string().max(300).optional(),
-});
+const requestSchema = z.object({ path: z.string().max(300).optional() });
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
@@ -41,23 +37,25 @@ async function resolvePageContext(path: string | undefined): Promise<string | un
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
-  if (!parsed.success) return Response.json({ error: "Invalid request." }, { status: 400 });
-
-  const { messages, path } = parsed.data;
-  const last = messages[messages.length - 1];
-  if (last.role !== "user") return Response.json({ error: "Last message must be from the user." }, { status: 400 });
+  const chat = await parseChatMessages((body as { messages?: unknown } | null)?.messages);
+  if (!parsed.success || !chat) return assistantErrorResponse(null, "bad_request");
 
   try {
-    const contextNote = await resolvePageContext(path).catch(() => undefined);
+    const { business } = await getCurrentBusiness();
+    if (!(await checkAgentLimit(business.id))) return assistantErrorResponse(null, "rate_limited");
+
+    const contextNote = await resolvePageContext(parsed.data.path).catch(() => undefined);
     const result = await runOrchestrator({
-      message: last.content,
-      history: messages.slice(0, -1) as ModelMessage[],
+      message: chat.message,
+      history: chat.history,
+      // Books and stock questions are multi-step; the owner is at a desk, not on WhatsApp.
+      tier: "thinking",
       contextNote: contextNote
         ? `You are chatting with the business owner inside their dashboard (not with a customer). ${contextNote}`
         : "You are chatting with the business owner inside their dashboard (not with a customer).",
     });
-    return createTextStreamResponse({ stream: toTextStream({ stream: result.fullStream }) });
+    return result.toUIMessageStreamResponse({ onError: assistantErrorMessage });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Copilot run failed" }, { status: 500 });
+    return assistantErrorResponse(error);
   }
 }

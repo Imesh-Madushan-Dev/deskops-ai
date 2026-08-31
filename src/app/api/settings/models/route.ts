@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { EMBEDDING_MODEL_NAME, PROVIDER_CATALOG, providerHasKey, resolveModelSelection, type ProviderId } from "@/lib/ai/provider";
+import { EMBEDDING_MODEL_NAME, PROVIDER_CATALOG, providerHasKey, providerModels, resolveModelSelection, type ProviderId } from "@/lib/ai/provider";
 import { getCurrentBusiness } from "@/lib/db/auth";
 
 export async function GET() {
@@ -32,7 +32,7 @@ export async function GET() {
       providers: (Object.keys(PROVIDER_CATALOG) as ProviderId[]).map((id) => ({
         id,
         label: PROVIDER_CATALOG[id].label,
-        models: PROVIDER_CATALOG[id].models,
+        models: providerModels(id).map((model) => ({ id: model.id, label: model.label, tier: model.tier })),
         hasKey: providerHasKey(id),
       })),
       usage: {
