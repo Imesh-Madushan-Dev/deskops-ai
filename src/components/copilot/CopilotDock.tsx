@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -94,6 +95,7 @@ function Chip({
 export function CopilotDock() {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [input, setInput] = useState("");
   const [open, setOpen] = useState(false);
@@ -174,9 +176,12 @@ export function CopilotDock() {
       queued.current = null;
       void sendMessage({ text: followUp });
     }
-    // No router.refresh() here: the agent's tool writes land in Postgres and useRealtimeSync
-    // already invalidates the matching query keys.
-  }, [busy, messages, sendMessage]);
+    // The agent's tools wrote straight to Postgres, so nothing told this browser's cache. Realtime
+    // would eventually say so, but this is the one path where we know a write happened and exactly
+    // when it finished — so drop the whole dashboard cache rather than wait for the WAL round trip
+    // or depend on the feed being configured. One refetch burst per agent turn, not a poll.
+    void queryClient.invalidateQueries();
+  }, [busy, messages, sendMessage, queryClient]);
 
   // setOpen lives in submit/quickSend/onError — every path that adds a message already opens
   // the card, so this only has to follow the scroll.
