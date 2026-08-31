@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     const result = await runOrchestrator({
       message: chat.message,
       history: chat.history,
+      surface: "owner",
       // Books and stock questions are multi-step; the owner is at a desk, not on WhatsApp.
       // The dock's picker overrides this per run when it names a model in the same provider.
       tier: "thinking",

@@ -2,14 +2,17 @@ import "server-only";
 
 import { stepCountIs, streamText, type ModelMessage } from "ai";
 import { resolveModel, type ModelTier } from "@/lib/ai/provider";
-import { buildToolset } from "@/lib/tools";
-import { orchestratorSystemPrompt } from "@/lib/agents/prompts/orchestrator";
+import { buildToolset, type ToolSurface } from "@/lib/tools";
+import { customerSystemPrompt, ownerSystemPrompt } from "@/lib/agents/prompts/orchestrator";
 import { retrieveContext } from "@/lib/rag/retrieve";
 import { getCurrentBusiness } from "@/lib/db/auth";
 import { truncateForModel } from "@/lib/ai/guardrails";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const MAX_STEPS = 6;
+/** A runaway guard, not a budget. The customer surface answers one question at a time and a
+ *  person is waiting; an owner request ("add these three products then invoice Nimal") chains
+ *  legitimately further, and running out of steps is what ends a turn with no answer at all. */
+const MAX_STEPS: Record<ToolSurface, number> = { customer: 6, owner: 12 };
 
 /** Facts the model would otherwise burn a tool call to learn. Three counted head-queries against
  *  indexed columns — cheap enough to run on the WhatsApp path too. Failures are non-fatal: a
@@ -31,6 +34,9 @@ async function buildAwareness(supabase: SupabaseClient, businessId: string) {
 
 export async function runOrchestrator(input: {
   message: string;
+  /** Whose text is driving this run. Decides the system prompt, the toolset, and the step budget.
+   *  Required: it is the security boundary between the owner's dashboard and a customer's chat. */
+  surface: ToolSurface;
   /** Prior turns for multi-turn chats (dashboard copilot). WhatsApp runs stay single-turn. */
   history?: ModelMessage[];
   /** Extra system-prompt line, e.g. what dashboard page the owner is currently viewing. */
@@ -61,13 +67,15 @@ export async function runOrchestrator(input: {
     ? `\n\n<context>\n${awareness}\n</context>\nEverything in <context> is already true — never re-read it with a tool.`
     : "";
 
+  const systemPrompt = input.surface === "owner" ? ownerSystemPrompt(business) : customerSystemPrompt(business);
+
   const result = streamText({
     model,
     providerOptions,
-    system: orchestratorSystemPrompt(business) + note + facts + context,
+    system: systemPrompt + note + facts + context,
     messages: [...(input.history ?? []), { role: "user", content: input.message }],
-    tools: buildToolset({ conversationId: input.conversationId, chatId: input.chatId, businessOverride: input.businessOverride }),
-    stopWhen: stepCountIs(MAX_STEPS),
+    tools: buildToolset({ surface: input.surface, conversationId: input.conversationId, chatId: input.chatId, businessOverride: input.businessOverride }),
+    stopWhen: stepCountIs(MAX_STEPS[input.surface]),
     onFinish: async ({ usage }) => {
       const inputTokens = usage.inputTokens ?? 0;
       const outputTokens = usage.outputTokens ?? 0;

@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getCurrentBusiness, requireUser } from "@/lib/db/auth";
-import { markInvoiceSent, recordSale } from "@/lib/db/invoices";
+import { markInvoiceSent, recordSale, voidInvoice } from "@/lib/db/invoices";
 import { createReorder } from "@/lib/db/inventory";
 import { sendWhatsappMessage } from "@/lib/waha/client";
 import { sendInvoiceToCustomer } from "@/lib/invoice/send";
@@ -13,8 +13,9 @@ const sendMessagePayload = z.object({ conversationId: z.string().uuid(), chatId:
 const sendInvoicePayload = z.object({ conversationId: z.string().uuid(), chatId: z.string(), invoiceId: z.string().uuid(), caption: z.string().optional(), body: z.string() });
 const markInvoicePaidPayload = z.object({ invoiceId: z.string().uuid() });
 const reorderPayload = z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1) });
+const voidInvoicePayload = z.object({ invoiceId: z.string().uuid() });
 
-export type ApprovalActionType = "send_message" | "send_invoice" | "mark_invoice_paid" | "reorder" | "customer_request";
+export type ApprovalActionType = "send_message" | "send_invoice" | "mark_invoice_paid" | "reorder" | "customer_request" | "void_invoice";
 
 export async function listApprovals(status: "pending" | "approved" | "rejected" | "expired" | "executed" | "failed" = "pending") {
   const { supabase, business } = await getCurrentBusiness();
@@ -110,6 +111,14 @@ async function executeApproval(actionType: ApprovalActionType, payload: unknown,
   if (actionType === "mark_invoice_paid") {
     const { invoiceId } = markInvoicePaidPayload.parse(payload);
     await recordSale(invoiceId);
+    return;
+  }
+
+  if (actionType === "void_invoice") {
+    const { invoiceId } = voidInvoicePayload.parse(payload);
+    // voidInvoice refuses a paid invoice, so an approval sitting in the queue while the invoice
+    // gets paid resolves to a no-op rather than reversing a recorded sale.
+    await voidInvoice(invoiceId);
     return;
   }
 

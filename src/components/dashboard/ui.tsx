@@ -181,6 +181,7 @@ export const approvalMeta: Record<string, { label: string; icon: IconSvgElement 
   mark_invoice_paid: { label: "Mark invoice paid", icon: InvoiceIcon },
   reorder: { label: "Create reorder", icon: PackageIcon },
   customer_request: { label: "Customer request", icon: Alert02Icon },
+  void_invoice: { label: "Void invoice", icon: InvoiceIcon },
 };
 
 export function describeApproval(payload: Record<string, unknown>) {

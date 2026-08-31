@@ -102,7 +102,7 @@ async function processJob(job: { business_id: string; job_type: string; payload:
       : whatsappStyle;
 
     // A customer is waiting on WhatsApp — the fast tier, not whatever the owner picked for the copilot.
-    const result = await runOrchestrator({ ...payload, history, contextNote, tier: "fast", businessOverride: { businessId: job.business_id } });
+    const result = await runOrchestrator({ ...payload, history, contextNote, surface: "customer", tier: "fast", businessOverride: { businessId: job.business_id } });
     const reply = (await result.text).trim();
 
     // Auto-send invoices the agent just drafted, if the owner enabled it. The invoice body already
