@@ -151,7 +151,8 @@ export function resolveModelSelection(settings: unknown): { providerId: Provider
   const providerId = isProviderId(ai?.provider) && providerHasKey(ai.provider) ? ai.provider : envDefault;
   const catalog = providerModelIds(providerId);
   const saved = typeof ai?.model === "string" && ai.provider === providerId && catalog.includes(ai.model) ? ai.model : null;
-  return { providerId, modelName: saved ?? modelForTier(providerId, "standard").id };
+  // ponytail: no saved pick => cheapest tier (Gemini 3.5 Flash Lite on Google).
+  return { providerId, modelName: saved ?? modelForTier(providerId, "fast").id };
 }
 
 /** Resolves the model for a surface. "standard" honours the owner's saved pick; "fast" and
