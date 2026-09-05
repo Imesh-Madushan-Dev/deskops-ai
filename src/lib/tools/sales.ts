@@ -4,8 +4,10 @@ import { getCurrentBusiness } from "@/lib/db/auth";
 import { createInvoice, reviseInvoice, voidInvoice, InvoicePaidError } from "@/lib/db/invoices";
 import { createApproval } from "@/lib/db/approvals";
 import { formatMoney } from "@/lib/utils/money";
+import { sameOrder } from "@/lib/utils/invoice";
 import { contactLabel } from "@/lib/utils/contact";
 import { sendWhatsappImage } from "@/lib/waha/client";
+import { sendInvoiceToCustomer } from "@/lib/invoice/send";
 import type { ConversationToolContext } from "./context";
 
 type InvoiceItems = { productId?: string; description: string; quantity: number; unitPrice: number }[];
@@ -31,6 +33,27 @@ export function createSalesTools(context: ConversationToolContext) {
     return (data?.payload as { invoiceId?: string })?.invoiceId ?? null;
   }
 
+  // That invoice with its live status and items — what tells us whether a "make me an invoice" is a
+  // genuine new order, a duplicate of one already sent, or an edit of one still awaiting approval.
+  async function currentInvoice(supabase: Awaited<ReturnType<typeof getCurrentBusiness>>["supabase"], businessId: string) {
+    const id = await currentInvoiceId(supabase, businessId);
+    if (!id) return null;
+    const { data } = await supabase
+      .from("invoices")
+      .select("id, number, status, total, invoice_items(description, quantity, unit_price)")
+      .eq("business_id", businessId)
+      .eq("id", id)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      id: data.id,
+      number: data.number ?? "",
+      status: data.status,
+      total: Number(data.total),
+      items: (data.invoice_items ?? []).map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: Number(i.unit_price) })),
+    };
+  }
+
   // Never invoice more than stock. Returns the lines we can't fulfil (empty = all good).
   async function stockShortfalls(supabase: Awaited<ReturnType<typeof getCurrentBusiness>>["supabase"], businessId: string, items: InvoiceItems) {
     const productIds = items.map((i) => i.productId).filter((id): id is string => Boolean(id));
@@ -42,7 +65,7 @@ export function createSalesTools(context: ConversationToolContext) {
       .map((i) => ({ product: stockById.get(i.productId!)?.name ?? i.description, requested: i.quantity, available: stockById.get(i.productId!)?.stock_qty ?? 0 }));
   }
 
-  // Queue the (updated) invoice to be sent as a formatted image with a friendly caption.
+  // Queue the (updated) invoice to be sent as a PDF document with a friendly caption.
   async function queueInvoiceSend(business: { currency: string }, invoice: { id: string; number: string; total: number }, friendly: string) {
     const body = `${friendly}\n\n🧾 ${invoice.number} · ${formatMoney(invoice.total, business.currency)}`;
     return createApproval(
@@ -68,28 +91,32 @@ export function createSalesTools(context: ConversationToolContext) {
     execute: async ({ customerId, items, customerMessage }) => {
       const { supabase, business } = await getCurrentBusiness(context.businessOverride);
 
-      // Idempotency: a customer confirming ("ok", "yes") must NOT spawn a second invoice. If we already
-      // drafted one for this chat recently, return it instead of creating a duplicate.
-      // ponytail: 15-min window; widen/narrow only if genuine separate orders in one chat need it.
-      const since = new Date(Date.now() - 15 * 60_000).toISOString();
-      const { data: recent } = await supabase
-        .from("approvals")
-        .select("payload")
-        .eq("business_id", business.id)
-        .eq("conversation_id", context.conversationId)
-        .eq("action_type", "send_invoice")
-        .gte("created_at", since)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (recent) {
-        const existingId = (recent.payload as { invoiceId?: string }).invoiceId;
-        const { data: existing } = existingId ? await supabase.from("invoices").select("number, total").eq("id", existingId).maybeSingle() : { data: null };
-        return {
-          status: "already_drafted" as const,
-          invoiceNumber: existing?.number,
-          note: "An invoice was already drafted for this chat and is being handled. Do NOT create another. Just reassure the customer their order is confirmed — no new invoice, no repeating the price.",
-        };
+      // Duplicate guard, keyed on the ORDER rather than on a clock. The old 15-minute window let a
+      // "send it again" 40 minutes later through as a second invoice for the same items, and — because
+      // it never looked at approvals.status — told customers to wait for an approval that had already
+      // executed. Both answers now come from the invoice's own live status.
+      const open = await currentInvoice(supabase, business.id);
+      if (open && (open.status === "draft" || open.status === "sent")) {
+        if (sameOrder(open.items, items)) {
+          return open.status === "sent"
+            ? {
+                status: "already_sent" as const,
+                invoiceNumber: open.number,
+                note: `Invoice ${open.number} for these exact items was already approved and sent to this customer. Do NOT create another and do NOT tell them to wait for approval. If they want the file again, call resendInvoice.`,
+              }
+            : {
+                status: "already_drafted" as const,
+                invoiceNumber: open.number,
+                note: `Invoice ${open.number} for these exact items is already drafted and waiting for the owner's confirmation. Do NOT create another — tell the customer it's being confirmed and will reach them shortly.`,
+              };
+        }
+        if (open.status === "draft") {
+          return {
+            status: "revise_instead" as const,
+            invoiceNumber: open.number,
+            note: `Invoice ${open.number} is still waiting for the owner's confirmation and its items differ from what you just passed. Call reviseInvoice with the FULL corrected item list instead of creating a second invoice.`,
+          };
+        }
       }
 
       // Stock guard: never draft an invoice for more than we actually have. The model must tell the
@@ -265,6 +292,59 @@ export function createSalesTools(context: ConversationToolContext) {
     },
   });
 
+  const resendInvoiceTool = tool({
+    description:
+      "Re-send the customer the invoice PDF they were already sent, when they ask for it again ('send again', 'ආයේ එවන්න', 'resend my invoice', 'I lost the file'). This is the SAME invoice — it creates nothing new and needs no owner approval. Never draft a second invoice for an order that already has one.",
+    inputSchema: z.object({
+      customerMessage: z
+        .string()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe("Short friendly line in the customer's own language, e.g. 'Here it is again 😊'. Do NOT include the price or invoice number — the file already carries them."),
+    }),
+    execute: async ({ customerMessage }) => {
+      const { supabase, business } = await getCurrentBusiness(context.businessOverride);
+      const invoice = await currentInvoice(supabase, business.id);
+      if (!invoice) return { status: "no_invoice" as const, note: "There's no invoice for this chat yet — nothing to re-send. Use draftAndQueueInvoice if they want one." };
+      if (invoice.status === "draft")
+        return {
+          status: "awaiting_owner_approval" as const,
+          invoiceNumber: invoice.number,
+          note: `Invoice ${invoice.number} hasn't been confirmed by the owner yet, so there is no sent file to re-send. Tell the customer it's being confirmed and will reach them shortly.`,
+        };
+      if (invoice.status === "void") return { status: "cancelled" as const, invoiceNumber: invoice.number, note: `Invoice ${invoice.number} was cancelled. Do not re-send it — ask the customer if they'd like to order again.` };
+
+      const caption = customerMessage?.trim() || "Here's your invoice again.";
+      const body = `${caption}
+
+🧾 ${invoice.number} · ${formatMoney(invoice.total, business.currency)}`;
+      const send = await sendInvoiceToCustomer({
+        session: business.whatsapp_session ?? "default",
+        chatId: context.chatId,
+        invoiceId: invoice.id,
+        businessId: business.id,
+        caption,
+        fallbackBody: body,
+      });
+      await supabase.from("messages").insert({
+        business_id: business.id,
+        conversation_id: context.conversationId,
+        direction: "outbound",
+        sender: "agent",
+        body: send.recordedBody,
+        provider_message_id: send.providerMessageId,
+      });
+      return {
+        status: send.sent ? ("sent" as const) : ("not_connected" as const),
+        invoiceNumber: invoice.number,
+        note: send.sent
+          ? "The invoice PDF is on its way with its caption — the customer already sees it. Reply with EMPTY text."
+          : "WhatsApp isn't connected, so the invoice text was recorded but not delivered. Do not promise it was sent.",
+      };
+    },
+  });
+
   const cancelInvoice = tool({
     description: "Cancel/void the CURRENT invoice for this chat when the customer cancels their order. Only works while the invoice is not yet paid.",
     inputSchema: z.object({}),
@@ -279,5 +359,5 @@ export function createSalesTools(context: ConversationToolContext) {
     },
   });
 
-  return { draftAndQueueInvoice, sendProductImage, getCustomerContext, escalateToOwner, saveCustomerDetails, reviseInvoice: reviseInvoiceTool, cancelInvoice };
+  return { draftAndQueueInvoice, resendInvoice: resendInvoiceTool, sendProductImage, getCustomerContext, escalateToOwner, saveCustomerDetails, reviseInvoice: reviseInvoiceTool, cancelInvoice };
 }

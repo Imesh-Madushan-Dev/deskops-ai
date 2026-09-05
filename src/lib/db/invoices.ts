@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { getCurrentBusiness } from "@/lib/db/auth";
 import { calculateInvoiceTotals } from "@/lib/utils/money";
+import { bumpInvoiceNumber } from "@/lib/utils/invoice";
 
 export const invoiceItemInputSchema = z.object({
   productId: z.string().uuid().optional().nullable(),
@@ -18,10 +19,21 @@ export const invoiceInputSchema = z.object({
 });
 export type InvoiceInput = z.infer<typeof invoiceInputSchema>;
 
+/** Derived from the HIGHEST existing number, never from the row count: deleting a customer hard-deletes
+ *  their invoices (delete_customer_cascade), so count+1 would hand out a number that already exists and
+ *  collide with the unique (business_id, number) index. Concurrent drafts are caught by that same index
+ *  and retried in createInvoice. */
 async function nextInvoiceNumber(supabase: Awaited<ReturnType<typeof getCurrentBusiness>>["supabase"], businessId: string) {
-  const { count, error } = await supabase.from("invoices").select("id", { count: "exact", head: true }).eq("business_id", businessId);
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("number")
+    .eq("business_id", businessId)
+    .not("number", "is", null)
+    .order("number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (error) throw error;
-  return `INV-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  return bumpInvoiceNumber(data?.number ?? null);
 }
 
 export async function listInvoices() {
@@ -50,14 +62,23 @@ export async function getInvoice(id: string) {
 export async function createInvoice(input: InvoiceInput, override?: { businessId: string }) {
   const { supabase, business } = await getCurrentBusiness(override);
   const { subtotal, tax, total } = calculateInvoiceTotals(input.items.map((i) => ({ quantity: i.quantity, unitPrice: i.unitPrice })), input.taxRate);
-  const number = await nextInvoiceNumber(supabase, business.id);
+  const insertWithNumber = (number: string) =>
+    supabase.from("invoices").insert({ business_id: business.id, customer_id: input.customerId || null, number, subtotal, tax, total }).select().single();
 
-  const { data: invoice, error: invoiceError } = await supabase
-    .from("invoices")
-    .insert({ business_id: business.id, customer_id: input.customerId || null, number, subtotal, tax, total })
-    .select()
-    .single();
-  if (invoiceError) throw invoiceError;
+  // Two chats drafting at once both read the same highest number; the unique (business_id, number)
+  // index rejects the loser, so re-read and retry rather than failing the sale.
+  let invoice: Awaited<ReturnType<typeof insertWithNumber>>["data"] = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3 && !invoice; attempt += 1) {
+    const { data, error } = await insertWithNumber(await nextInvoiceNumber(supabase, business.id));
+    if (!error) {
+      invoice = data;
+      break;
+    }
+    if ((error as { code?: string }).code !== "23505") throw error;
+    lastError = error;
+  }
+  if (!invoice) throw lastError;
 
   const { error: itemsError } = await supabase.from("invoice_items").insert(
     input.items.map((item) => ({
