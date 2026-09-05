@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageIntro, PageShell } from "@/components/dashboard/ui";
 import { useArchiveProduct, useProduct, useUpdateProduct } from "@/lib/query/products";
-import { useAdjustStock } from "@/lib/query/inventory";
+import { StockAdjustDialog, type AdjustTarget } from "@/components/inventory/StockAdjustDialog";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { formatMoney } from "@/lib/utils/money";
 
@@ -19,7 +21,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
   const { data: overview } = useDashboardOverview();
   const update = useUpdateProduct(productId);
   const archive = useArchiveProduct();
-  const adjustStock = useAdjustStock();
+  const [adjusting, setAdjusting] = useState<AdjustTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
   const currency = overview?.business.currency ?? "LKR";
 
@@ -69,7 +71,12 @@ export function ProductDetailView({ productId }: { productId: string }) {
               {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
               <div className="flex flex-wrap gap-3">
                 <Button type="submit" disabled={update.isPending} className="btn-purple border-0">{update.isPending ? "Saving…" : "Save changes"}</Button>
-                <Button type="button" variant="outline" disabled={archive.isPending} onClick={() => archive.mutate(productId, { onSuccess: () => router.push("/dashboard/products") })}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={archive.isPending || !product.is_active}
+                  onClick={() => archive.mutate(productId, { onSuccess: () => router.push("/dashboard/products") })}
+                >
                   {product.is_active ? "Archive product" : "Archived"}
                 </Button>
               </div>
@@ -86,13 +93,14 @@ export function ProductDetailView({ productId }: { productId: string }) {
               </div>
               <Badge variant={product.stock_qty <= product.reorder_level ? "destructive" : "secondary"}>{product.stock_qty <= product.reorder_level ? "Low stock" : "Healthy"}</Badge>
             </div>
-            <div className="mt-5 flex gap-3">
-              <Button variant="outline" onClick={() => adjustStock.mutate({ productId, delta: 1, reason: "adjustment" })}>+1</Button>
-              <Button variant="outline" onClick={() => adjustStock.mutate({ productId, delta: -1, reason: "adjustment" })} disabled={product.stock_qty <= 0}>-1</Button>
-              <Button variant="outline" onClick={() => adjustStock.mutate({ productId, delta: 10, reason: "restock" })}>+10 (restock)</Button>
+            <div className="mt-5">
+              <Button variant="outline" onClick={() => setAdjusting({ id: product.id, name: product.name, stock_qty: product.stock_qty })}>
+                <HugeiconsIcon icon={PencilEdit02Icon} size={16} /> Update stock
+              </Button>
             </div>
           </CardContent>
         </Card>
+      <StockAdjustDialog target={adjusting} onOpenChange={(open) => !open && setAdjusting(null)} />
     </PageShell>
   );
 }

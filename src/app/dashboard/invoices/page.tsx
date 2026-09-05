@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Clock01Icon, DollarCircleIcon, InvoiceIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -11,14 +12,19 @@ import { useDashboardOverview } from "@/lib/query/dashboard";
 import { formatMoney } from "@/lib/utils/money";
 import { contactLabel } from "@/lib/utils/contact";
 import { EmptyState, FilterChips, PageIntro, PageShell, Panel, relativeTime, StatCard, StatusPill } from "@/components/dashboard/ui";
+import { InvoiceSheet } from "@/components/invoices/InvoiceSheet";
 
 type StatusFilter = "all" | Invoice["status"];
 const statusTone = { draft: "neutral", sent: "brand", paid: "ok", void: "bad" } as const;
 
 export default function InvoicesPage() {
+  // Deep links (command palette, customer page, an old bookmarked invoice URL) land here with
+  // ?invoice=<id> and open straight into the sheet.
+  const searchParams = useSearchParams();
   const { data: invoices, isLoading } = useInvoices();
   const { data: overview } = useDashboardOverview();
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [openInvoice, setOpenInvoice] = useState<string | null>(searchParams.get("invoice"));
   const currency = overview?.business.currency ?? "LKR";
 
   const stats = useMemo(() => {
@@ -81,8 +87,8 @@ export default function InvoicesPage() {
               </TableCell></TableRow>
             )}
             {filtered.map((invoice) => (
-              <TableRow key={invoice.id}>
-                <TableCell className="font-mono text-sm font-medium"><Link href={`/dashboard/invoices/${invoice.id}`} className="hover:text-primary">{invoice.number}</Link></TableCell>
+              <TableRow key={invoice.id} className="cursor-pointer" onClick={() => setOpenInvoice(invoice.id)}>
+                <TableCell className="font-mono text-sm font-medium">{invoice.number}</TableCell>
                 <TableCell className="text-muted-foreground">{contactLabel(invoice.customers)}</TableCell>
                 <TableCell className="hidden text-muted-foreground sm:table-cell">{relativeTime(invoice.created_at)}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{formatMoney(invoice.total, currency)}</TableCell>
@@ -92,6 +98,8 @@ export default function InvoicesPage() {
           </TableBody>
         </Table>
       </Panel>
+
+      <InvoiceSheet invoiceId={openInvoice} onClose={() => setOpenInvoice(null)} />
     </PageShell>
   );
 }

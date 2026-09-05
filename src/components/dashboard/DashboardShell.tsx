@@ -16,16 +16,17 @@ import {
   Logout01Icon,
   PackageIcon,
   PieChartIcon,
-  Search01Icon,
   Settings02Icon,
   UserGroupIcon,
   WhatsappIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { Kbd } from "@/components/ui/kbd";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDashboardOverview } from "@/lib/query/dashboard";
+import { useWhatsappSession } from "@/lib/query/settings";
 import { useRealtimeSync } from "@/lib/query/realtime";
 import { COPILOT_FOCUS_EVENT, CopilotDock } from "@/components/copilot/CopilotDock";
 import { CommandPalette } from "@/components/dashboard/CommandPalette";
@@ -76,7 +77,13 @@ function ProfileCard() {
   );
 }
 
-function NavContent({ groups, pathname, onNavigate, onOpenPalette }: { groups: NavGroup[]; pathname: string; onNavigate?: () => void; onOpenPalette: () => void }) {
+function NavContent({ groups, pathname, onNavigate }: { groups: NavGroup[]; pathname: string; onNavigate?: () => void }) {
+  // Only the longest matching href wins, so /dashboard/books/reports lights Reports, not Books too.
+  const activeHref = groups
+    .flatMap((group) => group.items.map((item) => item.href))
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <div className="flex h-full flex-col">
       <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2.5 px-2 py-1.5">
@@ -84,22 +91,13 @@ function NavContent({ groups, pathname, onNavigate, onOpenPalette }: { groups: N
         <span className="text-sm font-semibold tracking-wide">Deskops <span className="text-primary">AI</span></span>
       </Link>
 
-      <button
-        type="button"
-        onClick={onOpenPalette}
-        className="mt-5 flex h-9 items-center gap-2 rounded-lg border border-border/70 bg-background/60 px-3 text-[13px] text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-      >
-        <HugeiconsIcon icon={Search01Icon} size={14} /> Search…
-        <Kbd className="ml-auto">⌘K</Kbd>
-      </button>
-
-      <nav className="mt-4 flex-1 space-y-5 overflow-y-auto pb-4">
+      <nav className="mt-5 flex-1 space-y-5 overflow-y-auto pb-4">
         {groups.map((group) => (
           <div key={group.label}>
             <p className="px-3 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">{group.label}</p>
             <div className="mt-1.5 space-y-0.5">
               {group.items.map((item) => {
-                const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+                const active = item.href === activeHref;
                 return (
                   <Link
                     key={item.href}
@@ -133,6 +131,8 @@ function NavContent({ groups, pathname, onNavigate, onOpenPalette }: { groups: N
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: overview } = useDashboardOverview();
+  // Live WAHA status, not just "a session name is saved" — a logged-out number now reads offline.
+  const { data: whatsapp } = useWhatsappSession();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   useRealtimeSync();
@@ -186,15 +186,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ShellContext.Provider value={shellApi}>
+      {/* One provider for the whole dashboard — every page's tooltips hang off this. */}
+      <TooltipProvider delayDuration={200}>
       <div className="min-h-svh bg-muted/30 text-foreground">
         <aside className="dashboard-sidebar fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-border/70 p-4 lg:flex lg:flex-col">
-          <NavContent groups={groups} pathname={pathname} onOpenPalette={shellApi.openPalette} />
+          <NavContent groups={groups} pathname={pathname} />
           <div className="mt-auto">
             <div className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/75 px-3 py-2.5 shadow-sm">
-              <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
-                <span className={cn("size-2 shrink-0 rounded-full", overview?.business.whatsappConnected ? "bg-[#34d399]" : "bg-muted-foreground/40")} />
-                <span className="truncate">{overview?.business.whatsappConnected ? "WhatsApp live" : "WhatsApp offline"}</span>
-              </span>
+              <Link href="/dashboard/settings/integrations" className="flex min-w-0 items-center gap-2 text-xs font-medium hover:text-primary">
+                <span className={cn("size-2 shrink-0 rounded-full", whatsapp?.connected ? "bg-[#34d399]" : "bg-muted-foreground/40")} />
+                <span className="truncate">{whatsapp?.connected ? "WhatsApp live" : "WhatsApp offline"}</span>
+              </Link>
               <StatusPill tone={autopilot ? "brand" : "neutral"} dot={false} className="shrink-0">{autopilot ? "Autopilot" : "Manual"}</StatusPill>
             </div>
             <ProfileCard />
@@ -204,7 +206,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <Sheet open={navOpen} onOpenChange={setNavOpen}>
           <SheetContent side="left" className="dashboard-sidebar w-72 p-4">
             <SheetHeader className="sr-only"><SheetTitle>Navigation</SheetTitle></SheetHeader>
-            <NavContent groups={groups} pathname={pathname} onNavigate={() => setNavOpen(false)} onOpenPalette={() => { setNavOpen(false); shellApi.openPalette(); }} />
+            <NavContent groups={groups} pathname={pathname} onNavigate={() => setNavOpen(false)} />
             <ProfileCard />
           </SheetContent>
         </Sheet>
@@ -218,7 +220,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           onOpenCopilot={() => window.dispatchEvent(new Event(COPILOT_FOCUS_EVENT))}
         />
         <CopilotDock />
+        {/* Mutations are otherwise silent — the row just sits there and the owner clicks again. */}
+        <Toaster position="bottom-center" />
       </div>
+      </TooltipProvider>
     </ShellContext.Provider>
   );
 }

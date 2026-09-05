@@ -1,6 +1,7 @@
-import { InvoiceDetailView } from "@/components/invoices/InvoiceDetailView";
+import { redirect } from "next/navigation";
 
+/** The invoice view is a sheet on the list page now; this keeps old links and bookmarks working. */
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const { invoiceId } = await params;
-  return <InvoiceDetailView invoiceId={invoiceId} />;
+  redirect(`/dashboard/invoices?invoice=${invoiceId}`);
 }

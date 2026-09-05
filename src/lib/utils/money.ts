@@ -1,6 +1,6 @@
 /** All money math happens here — the model only ever formats/echoes these results. */
 
-export function calculateLineTotal(quantity: number, unitPrice: number) {
+function calculateLineTotal(quantity: number, unitPrice: number) {
   return round2(quantity * unitPrice);
 }
 

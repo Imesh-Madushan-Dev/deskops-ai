@@ -40,13 +40,3 @@ export function useDeleteCustomer() {
   });
 }
 
-export function useUpdateCustomer(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: Partial<CustomerInput>) => fetch(`/api/customers/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }).then((r) => json<Customer>(r)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.customers });
-      qc.invalidateQueries({ queryKey: qk.customer(id) });
-    },
-  });
-}
