@@ -44,3 +44,5 @@ next-env.d.ts
 /ignore
 
 .vercel
+
+railway.md
