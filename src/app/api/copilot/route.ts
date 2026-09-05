@@ -49,11 +49,10 @@ export async function POST(request: Request) {
       message: chat.message,
       history: chat.history,
       surface: "owner",
-      // Standard, not thinking: the thinking model burns the scarcest per-model daily quota and
+      // Fast, not thinking: the thinking model burns the scarcest per-model daily quota and
       // was the config that intermittently finished a tool-using run with no answer at all.
-      // It still streams a thought process, and the dock's picker reaches the deeper model in
-      // one click when a question actually needs it.
-      tier: "standard",
+      // The dock's picker reaches the deeper models in one click when a question needs it.
+      tier: "fast",
       modelId: parsed.data.modelId,
       contextNote: contextNote
         ? `You are chatting with the business owner inside their dashboard (not with a customer). ${contextNote}`

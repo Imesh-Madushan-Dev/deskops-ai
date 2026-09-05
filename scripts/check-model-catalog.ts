@@ -14,7 +14,7 @@ const source = readFileSync(new URL("../src/lib/ai/provider.ts", import.meta.url
 const catalog = source.slice(source.indexOf("export const PROVIDER_CATALOG"), source.indexOf("} as const satisfies"));
 
 const providers = [...catalog.matchAll(/^ {2}(\w+): \{$/gm)].map((m) => m[1]);
-assert.deepEqual(providers, ["google", "openai", "anthropic", "groq"], "provider set changed");
+assert.deepEqual(providers, ["google", "openai", "anthropic"], "provider set changed");
 
 for (const [index, provider] of providers.entries()) {
   const start = catalog.indexOf(`  ${provider}: {`);

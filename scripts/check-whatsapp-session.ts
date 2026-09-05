@@ -7,7 +7,7 @@
  * Run: bun run scripts/check-whatsapp-session.ts
  */
 import assert from "node:assert/strict";
-import { phoneFromWahaId, resolveSessionName as resolve, sessionNameFor } from "../src/lib/waha/session";
+import { phoneFromWahaId, resolveSessionName as resolve } from "../src/lib/waha/session";
 
 // An already-connected business keeps its name, whatever it is — including legacy hand-typed ones.
 assert.equal(resolve({ id: "3f1c…", whatsapp_session: "new" }), "new");

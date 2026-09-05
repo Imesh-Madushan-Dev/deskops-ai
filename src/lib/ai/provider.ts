@@ -3,7 +3,6 @@ import "server-only";
 import { createGoogle } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createGroq } from "@ai-sdk/groq";
 import type { LanguageModel } from "ai";
 
 /** Which surface is asking. The owner picks one provider (and their preferred everyday model);
@@ -35,32 +34,34 @@ export const PROVIDER_CATALOG = {
     envKey: "GEMINI_API_KEY",
     models: [
       {
+        // The only current Flash-Lite — Google ships no Lite variant above 3.5.
         id: "gemini-3.5-flash-lite",
         label: "Gemini 3.5 Flash Lite",
         tier: "fast",
         // Cheapest tier still reasons a little; thoughts stay off to keep WhatsApp snappy.
         providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } },
-        usdIn: 0.1,
-        usdOut: 0.4,
-      },
-      {
-        id: "gemini-3.6-flash",
-        label: "Gemini 3.6 Flash",
-        tier: "standard",
-        providerOptions: { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } },
         usdIn: 0.3,
         usdOut: 2.5,
+      },
+      {
+        id: "gemini-3.7-flash",
+        label: "Gemini 3.7 Flash",
+        tier: "standard",
+        providerOptions: { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } },
+        // Promotional rate through 2026-12-31; rises to 1.5 / 7.5 after.
+        usdIn: 0.75,
+        usdOut: 3.75,
       },
       {
         // Not Pro: gemini-3.1-pro-preview has a free-tier quota of literally 0, so a project
         // without billing 429s on every copilot run. The newest flash, thinking dialled up.
-        // Swap to "gemini-3.1-pro-preview" (usdIn 1.25 / usdOut 10) once billing is enabled.
-        id: "gemini-3.7-flash",
-        label: "Gemini 3.7 Flash",
+        // Swap to "gemini-3.1-pro-preview" (usdIn 2 / usdOut 12) once billing is enabled.
+        id: "gemini-3.8-flash",
+        label: "Gemini 3.8 Flash",
         tier: "thinking",
         providerOptions: { google: { thinkingConfig: { thinkingLevel: "high", includeThoughts: true } } },
-        usdIn: 0.3,
-        usdOut: 2.5,
+        usdIn: 0.75,
+        usdOut: 3.75,
       },
     ],
   },
@@ -68,15 +69,17 @@ export const PROVIDER_CATALOG = {
     label: "OpenAI",
     envKey: "OPENAI_API_KEY",
     models: [
-      { id: "gpt-5-nano", label: "GPT-5 Nano", tier: "fast", usdIn: 0.05, usdOut: 0.4 },
-      { id: "gpt-5.2", label: "GPT-5.2", tier: "standard", usdIn: 1.25, usdOut: 10 },
+      { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", tier: "fast", usdIn: 0.2, usdOut: 1.2 },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", tier: "standard", usdIn: 2, usdOut: 12 },
       {
-        id: "gpt-5.2-pro",
-        label: "GPT-5.2 Pro",
+        // Flagship, and priced like one — the picker reaches it per question, nothing routes
+        // here by default.
+        id: "gpt-6-astra",
+        label: "GPT-6 Astra",
         tier: "thinking",
         providerOptions: { openai: { reasoningEffort: "high", reasoningSummary: "auto" } },
-        usdIn: 15,
-        usdOut: 120,
+        usdIn: 10,
+        usdOut: 50,
       },
     ],
   },
@@ -84,27 +87,19 @@ export const PROVIDER_CATALOG = {
     label: "Anthropic Claude",
     envKey: "ANTHROPIC_API_KEY",
     models: [
-      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", tier: "fast", usdIn: 1, usdOut: 5 },
-      { id: "claude-sonnet-5", label: "Sonnet 5", tier: "standard", usdIn: 3, usdOut: 15 },
+      // Ids are complete as-is — never append a date suffix.
+      { id: "claude-haiku-4-5", label: "Haiku 4.5", tier: "fast", usdIn: 1, usdOut: 5 },
+      { id: "claude-sonnet-5", label: "Sonnet 5", tier: "standard", usdIn: 2, usdOut: 10 },
       {
         id: "claude-opus-5",
         label: "Opus 5",
         tier: "thinking",
         // 'adaptive' lets the model decide how long to think; 'summarized' is what makes the
-        // reasoning stream back at all — 'omitted' thinks but sends nothing to render.
+        // reasoning stream back at all — 'omitted' (the default) thinks but sends nothing to render.
         providerOptions: { anthropic: { thinking: { type: "adaptive", display: "summarized" } } },
         usdIn: 5,
         usdOut: 25,
       },
-    ],
-  },
-  groq: {
-    label: "Groq",
-    envKey: "GROQ_API_KEY",
-    models: [
-      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B", tier: "fast", usdIn: 0.59, usdOut: 0.79 },
-      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", tier: "standard", usdIn: 0.15, usdOut: 0.75 },
-      { id: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 70B", tier: "thinking", usdIn: 0.75, usdOut: 0.99 },
     ],
   },
 } as const satisfies Record<string, { label: string; envKey: string; models: readonly ModelDef[] }>;
@@ -135,10 +130,20 @@ function modelForTier(id: ProviderId, tier: ModelTier): ModelDef {
   return models.find((model) => model.tier === tier) ?? models[0];
 }
 
+/** Finds a model anywhere in the catalog. The dock lets an owner reach any provider's models per
+ *  question, so an id no longer has to belong to their saved provider — it only has to be a real
+ *  catalog entry, which is what keeps a forged id from naming an arbitrary model. */
+function findCatalogModel(modelId: string): { providerId: ProviderId; def: ModelDef } | null {
+  for (const providerId of Object.keys(PROVIDER_CATALOG) as ProviderId[]) {
+    const def = (PROVIDER_CATALOG[providerId].models as readonly ModelDef[]).find((model) => model.id === modelId);
+    if (def) return { providerId, def };
+  }
+  return null;
+}
+
 function instantiate(id: ProviderId) {
   if (id === "anthropic") return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   if (id === "openai") return createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  if (id === "groq") return createGroq({ apiKey: process.env.GROQ_API_KEY });
   return createGoogle({ apiKey: process.env.GEMINI_API_KEY });
 }
 
@@ -159,9 +164,10 @@ export function resolveModelSelection(settings: unknown): { providerId: Provider
  *  "thinking" take the provider's model for that tier — the owner chose a provider, not a
  *  latency profile for every surface at once.
  *
- *  `modelId` is a per-run override from the copilot's picker. It comes from the client, so it
- *  only wins when it names a model in the business's own provider catalog — otherwise the tier
- *  applies and a forged id is simply ignored. */
+ *  `modelId` is a per-run override from the copilot's picker, and may name a model from ANY
+ *  provider — the saved provider is the default for the agents, not a cage around the dock. It
+ *  comes from the client, so it only wins when it names a real catalog model whose provider has
+ *  an API key; anything else falls through to the tier. */
 export function resolveModel(
   settings: unknown,
   tier: ModelTier = "standard",
@@ -175,11 +181,13 @@ export function resolveModel(
   usdOut: number;
 } {
   const selection = resolveModelSelection(settings);
-  const { providerId } = selection;
+  // A cross-provider override brings its own provider with it, so usage is billed and logged
+  // against the provider that actually ran.
+  const override = modelId ? findCatalogModel(modelId) : null;
+  const providerId = override && providerHasKey(override.providerId) ? override.providerId : selection.providerId;
   const models = PROVIDER_CATALOG[providerId].models as readonly ModelDef[];
-  const requested = modelId ? models.find((model) => model.id === modelId) : undefined;
   const def =
-    requested ??
+    (providerId === override?.providerId ? override.def : undefined) ??
     (tier === "standard"
       ? models.find((model) => model.id === selection.modelName) ?? modelForTier(providerId, "standard")
       : modelForTier(providerId, tier));

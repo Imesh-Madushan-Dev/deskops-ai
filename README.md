@@ -303,8 +303,7 @@ cp .env.example .env.local
 | `GEMINI_API_KEY` | ⚪️ | Default provider |
 | `OPENAI_API_KEY` | ⚪️ | Alternative provider |
 | `ANTHROPIC_API_KEY` | ⚪️ | Alternative provider |
-| `GROQ_API_KEY` | ⚪️ | Alternative provider |
-| `AI_PROVIDER` | ⚪️ | Fallback provider — `google` \| `openai` \| `anthropic` \| `groq` |
+| `AI_PROVIDER` | ⚪️ | Fallback provider — `google` \| `openai` \| `anthropic` |
 | `WAHA_BASE_URL` | ⚪️ | WAHA instance URL |
 | `WAHA_API_KEY` | ⚪️ | WAHA authentication |
 | `WAHA_WEBHOOK_SECRET` | ⚪️ | HMAC secret for inbound webhook verification |
