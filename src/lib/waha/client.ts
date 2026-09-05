@@ -69,6 +69,18 @@ export async function sendWhatsappImageData(session: string, chatId: string, bas
   return { sent: true as const, providerMessageId: data.id ?? null };
 }
 
+/** Send an arbitrary file (e.g. an invoice PDF) as base64 — same shape as sendImage, so no
+ *  bucket or public URL is needed. */
+export async function sendWhatsappFileData(session: string, chatId: string, base64: string, mimetype: string, filename: string, caption?: string) {
+  if (!isWahaConfigured()) return { sent: false as const, reason: "WAHA is not configured" as const };
+
+  const data = await wahaJson<{ id?: string }>("WhatsApp file send", "/api/sendFile", {
+    method: "POST",
+    body: JSON.stringify({ session, chatId, file: { mimetype, filename, data: base64 }, caption: caption ?? "" }),
+  });
+  return { sent: true as const, providerMessageId: data.id ?? null };
+}
+
 export async function sendWhatsappImage(session: string, chatId: string, imageUrl: string, caption?: string) {
   if (!isWahaConfigured()) return { sent: false, reason: "WAHA is not configured" as const };
 

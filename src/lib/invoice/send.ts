@@ -1,11 +1,11 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendWhatsappImageData, sendWhatsappMessage } from "@/lib/waha/client";
-import { renderInvoiceImagePng } from "@/lib/invoice/image";
+import { sendWhatsappFileData, sendWhatsappMessage } from "@/lib/waha/client";
+import { renderInvoicePdfBase64 } from "@/lib/invoice/pdf";
 
-/** Sends an invoice to the customer as a formatted image (a real invoice document) with a short caption.
- *  Falls back to the plain-text `fallbackBody` if WAHA isn't configured or the image can't be rendered,
+/** Sends an invoice to the customer as a PDF document with a short caption. Falls back to the
+ *  plain-text `fallbackBody` if WAHA isn't configured or the PDF can't be rendered,
  *  so the flow never breaks. Returns what was actually sent so the caller can record the message. */
 export async function sendInvoiceToCustomer(input: {
   session: string;
@@ -28,7 +28,7 @@ export async function sendInvoiceToCustomer(input: {
       ? await supabase.from("customers").select("name, address, phone").eq("id", invoice.customer_id).eq("business_id", input.businessId).maybeSingle()
       : { data: null };
 
-    const base64 = await renderInvoiceImagePng({
+    const base64 = await renderInvoicePdfBase64({
       businessName: biz.name,
       currency: biz.currency,
       number: invoice.number,
@@ -40,12 +40,12 @@ export async function sendInvoiceToCustomer(input: {
       total: Number(invoice.total),
     });
 
-    const send = await sendWhatsappImageData(input.session, input.chatId, base64, "image/png", `${invoice.number}.png`, input.caption);
+    const send = await sendWhatsappFileData(input.session, input.chatId, base64, "application/pdf", `${invoice.number}.pdf`, input.caption);
     if (send.sent) return { sent: true, providerMessageId: send.providerMessageId, recordedBody: input.caption };
     // WAHA not configured — record locally as text so the dashboard/books stay correct.
     return { sent: false, providerMessageId: null, recordedBody: input.fallbackBody };
   } catch {
-    // Rendering or the image API failed — never leave the customer hanging; send the plain text instead.
+    // Rendering or the file API failed — never leave the customer hanging; send the plain text instead.
     const send = await sendWhatsappMessage(input.session, input.chatId, input.fallbackBody);
     return { sent: send.sent, providerMessageId: send.sent ? (send.providerMessageId ?? null) : null, recordedBody: input.fallbackBody };
   }
