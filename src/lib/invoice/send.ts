@@ -44,8 +44,10 @@ export async function sendInvoiceToCustomer(input: {
     if (send.sent) return { sent: true, providerMessageId: send.providerMessageId, recordedBody: input.caption };
     // WAHA not configured — record locally as text so the dashboard/books stay correct.
     return { sent: false, providerMessageId: null, recordedBody: input.fallbackBody };
-  } catch {
+  } catch (error) {
     // Rendering or the file API failed — never leave the customer hanging; send the plain text instead.
+    // Loud: a silent fallback here looks like "the AI sent a text message instead of the invoice".
+    console.error(`[invoice] PDF send failed for ${input.invoiceId}, falling back to text:`, error);
     const send = await sendWhatsappMessage(input.session, input.chatId, input.fallbackBody);
     return { sent: send.sent, providerMessageId: send.sent ? (send.providerMessageId ?? null) : null, recordedBody: input.fallbackBody };
   }
