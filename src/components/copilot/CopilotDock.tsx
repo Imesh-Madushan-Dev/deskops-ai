@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { describeAssistantError } from "@/lib/ai/errors";
 import { AgentMessageParts, assistantText } from "./AgentMessage";
 import { ModelPicker } from "./ModelPicker";
+import { DotmSquare11 } from "@/components/ui/dotm-square-11";
 
 type IconType = typeof Clock01Icon;
 
@@ -342,9 +343,12 @@ export function CopilotDock() {
                   ),
                 )}
 
+                {/* The only indicator before the first token lands. Says "Working", not "Thinking" —
+                    most models here do no reasoning at all. */}
                 {busy && !lastHasContent && (
-                  <p role="status" aria-live="polite" className="t-shimmer text-xs" data-text="Thinking…">
-                    Thinking…
+                  <p role="status" aria-live="polite" className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0 text-primary" />
+                    <span className="t-shimmer" data-text="Working…">Working…</span>
                   </p>
                 )}
 

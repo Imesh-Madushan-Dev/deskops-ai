@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { AlertCircleIcon, ArrowDown01Icon, CheckmarkCircle02Icon, Clock01Icon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, ArrowDown01Icon, CancelCircleIcon, CheckmarkCircle02Icon, Clock01Icon } from "@hugeicons/core-free-icons";
 import { getToolName, isReasoningUIPart, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
 import { DotmSquare11 } from "@/components/ui/dotm-square-11";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -12,6 +12,61 @@ import { cn } from "@/lib/utils";
 
 /** "draftAndQueueInvoice" → "Draft and queue invoice". Beats a hand-kept label map that goes
  *  stale the moment someone adds a tool. */
+/** Which specialist each tool belongs to, mirroring src/lib/tools/*.ts. Showing this turns the
+ *  work list from a flat set of verbs into the routing the architecture actually performs:
+ *  Orchestrator → specialist → tool. */
+const TOOL_AGENT: Record<string, string> = {
+  checkStock: "Inventory",
+  lookupCustomer: "Customer",
+  getBooksSnapshot: "Books",
+  findCustomers: "Customer",
+  findInvoices: "Sales",
+  addProduct: "Inventory",
+  editProduct: "Inventory",
+  adjustProductStock: "Inventory",
+  archiveProductTool: "Inventory",
+  addCustomer: "Customer",
+  editCustomer: "Customer",
+  createDraftInvoice: "Sales",
+  reviseDraftInvoice: "Sales",
+  recordLedgerEntry: "Books",
+  requestMarkInvoicePaid: "Books",
+  requestVoidInvoice: "Sales",
+  requestReorder: "Inventory",
+  draftAndQueueInvoice: "Sales",
+  getCustomerContext: "Customer",
+  sendProductImage: "Sales",
+  escalateToOwner: "Orchestrator",
+  saveCustomerDetails: "Customer",
+  reviseInvoiceTool: "Sales",
+  cancelInvoice: "Sales",
+};
+
+/** The arguments the model passed, as a short "key: value" line — this is the "what it went and
+ *  looked for" half that a bare tool name leaves out. Values are model-authored, so they render
+ *  as plain text and never as markup. */
+function describeInput(input: unknown): string | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const parts = Object.entries(input as Record<string, unknown>)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .slice(0, 3)
+    .map(([key, value]) => `${humanize(key).toLowerCase()}: ${formatArgValue(value)}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Date ranges reach tools as full ISO timestamps. Printing them raw is noise nobody reads —
+ *  show the day instead, and drop the time entirely since these ranges are day-aligned. */
+function formatArgValue(value: unknown): string {
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) {
+    const date = new Date(text);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    }
+  }
+  return text.slice(0, 40);
+}
+
 function humanize(toolName: string) {
   const words = toolName.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
@@ -88,21 +143,12 @@ export function AgentMessageParts({
 
   return (
     <div className="flex flex-col">
-      {/* A run that has not emitted reasoning or a tool call yet still needs to look alive. */}
-      {streaming && !hasWork && (
-        <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0" />
-          <span className="t-shimmer" data-text={label}>
-            {label}
-          </span>
-        </span>
-      )}
       {hasWork && (
         <Collapsible open={open} onOpenChange={onOpenChange}>
           <CollapsibleTrigger className="group flex w-full items-center gap-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground">
             {streaming ? (
               <>
-                <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0" />
+                <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0 text-primary" />
                 <span className="t-shimmer" data-text={label}>{label}</span>
               </>
             ) : (
@@ -127,16 +173,27 @@ export function AgentMessageParts({
                 const failure = part.state === "output-error" ? "" : toolErrorText(part);
                 const failed = part.state === "output-error" || failure !== null;
                 const done = part.state === "output-available" && !failed;
+                const name = getToolName(part);
+                const agent = TOOL_AGENT[name];
+                const args = describeInput(part.input);
 
                 return (
-                  <p key={index} className={cn("flex items-start gap-1.5 text-xs", failed ? "text-destructive" : "text-muted-foreground")}>
-                    <HugeiconsIcon icon={done ? CheckmarkCircle02Icon : Clock01Icon} size={14} className="mt-0.5 shrink-0" />
-                    <span>
-                      {humanize(getToolName(part))}
-                      {failed ? ` — ${failure || "could not complete"}` : null}
-                      {!failed && !done ? "…" : null}
-                    </span>
-                  </p>
+                  <div key={index} className="flex items-start gap-1.5 text-xs">
+                    <HugeiconsIcon
+                      icon={failed ? CancelCircleIcon : done ? CheckmarkCircle02Icon : Clock01Icon}
+                      size={14}
+                      className={cn("mt-0.5 shrink-0", failed ? "text-destructive" : done ? "text-[#047857] dark:text-[#34d399]" : "text-muted-foreground")}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className={failed ? "text-destructive" : "text-foreground/80"}>
+                        {agent && <span className="text-muted-foreground">{agent} agent · </span>}
+                        {humanize(name)}
+                        {!failed && !done ? "…" : null}
+                      </p>
+                      {args && <p className="truncate text-muted-foreground">{args}</p>}
+                      {failed && <p className="text-destructive">{failure || "could not complete"}</p>}
+                    </div>
+                  </div>
                 );
               })}
             </div>

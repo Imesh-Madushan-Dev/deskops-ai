@@ -5,7 +5,9 @@ import { assistantErrorMessage, assistantErrorResponse } from "@/lib/ai/errors";
 import { parseChatMessages } from "@/lib/ai/messages";
 import { checkAgentLimit } from "@/lib/ai/ratelimit";
 
-const requestSchema = z.object({ path: z.string().max(300).optional(), modelId: z.string().max(120).optional() });
+// `nullish`, not `optional`: the dock sends `modelId: null` until the owner picks a model, and
+// `optional()` rejects null — which failed every message on a fresh session before one was picked.
+const requestSchema = z.object({ path: z.string().max(300).nullish(), modelId: z.string().max(120).nullish() });
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     const { business } = await getCurrentBusiness();
     if (!(await checkAgentLimit(business.id))) return assistantErrorResponse(null, "rate_limited");
 
-    const contextNote = await resolvePageContext(parsed.data.path).catch(() => undefined);
+    const contextNote = await resolvePageContext(parsed.data.path ?? undefined).catch(() => undefined);
     const result = await runOrchestrator({
       message: chat.message,
       history: chat.history,
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
       // was the config that intermittently finished a tool-using run with no answer at all.
       // The dock's picker reaches the deeper models in one click when a question needs it.
       tier: "fast",
-      modelId: parsed.data.modelId,
+      modelId: parsed.data.modelId ?? undefined,
       contextNote: contextNote
         ? `You are chatting with the business owner inside their dashboard (not with a customer). ${contextNote}`
         : "You are chatting with the business owner inside their dashboard (not with a customer).",

@@ -116,6 +116,19 @@ export function providerHasKey(id: ProviderId) {
 
 /** The models a provider offers, one per tier. Ids are unique within a provider — a duplicate
  *  silently costs the picker a tier, so scripts/check-model-catalog.ts asserts it. */
+/** Whether a model actually streams reasoning back to the UI. Having `providerOptions` is not the
+ *  test — Gemini's fast tier sets a thinking level but never asks for thoughts, so it has options
+ *  and no reasoning to show. Each provider surfaces thoughts through its own opt-in flag. */
+export function modelShowsReasoning(def: Pick<ModelDef, "providerOptions">): boolean {
+  const options = def.providerOptions;
+  if (!options) return false;
+  const google = options.google?.thinkingConfig as { includeThoughts?: boolean } | undefined;
+  if (google?.includeThoughts === true) return true;
+  if (options.openai?.reasoningSummary != null) return true;
+  const anthropic = options.anthropic?.thinking as { display?: string } | undefined;
+  return anthropic?.display === "summarized";
+}
+
 export function providerModels(id: ProviderId): ModelDef[] {
   return [...(PROVIDER_CATALOG[id].models as readonly ModelDef[])];
 }

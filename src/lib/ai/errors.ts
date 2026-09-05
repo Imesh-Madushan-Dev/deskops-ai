@@ -24,7 +24,7 @@ const COPY: Record<AssistantErrorCode, AssistantErrorCopy> = {
   },
   bad_request: {
     title: "That message couldn't be sent",
-    detail: "Start a new chat and try again.",
+    detail: "The request was rejected before it reached the model. Try rephrasing, or start a new chat if it keeps happening.",
     retryable: false,
   },
   no_model: {

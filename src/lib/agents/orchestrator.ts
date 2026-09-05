@@ -1,7 +1,7 @@
 import "server-only";
 
 import { stepCountIs, streamText, type ModelMessage } from "ai";
-import { resolveModel, type ModelTier } from "@/lib/ai/provider";
+import { modelShowsReasoning, resolveModel, type ModelTier } from "@/lib/ai/provider";
 import { buildToolset, type ToolSurface } from "@/lib/tools";
 import { customerSystemPrompt, ownerSystemPrompt } from "@/lib/agents/prompts/orchestrator";
 import { retrieveContext } from "@/lib/rag/retrieve";
@@ -92,7 +92,6 @@ export async function runOrchestrator(input: {
     },
   });
 
-  // A model with no thinking config never produces real reasoning; the routes use this to keep a
-  // "Thought process" section off turns that have none to show.
-  return Object.assign(result, { thinks: providerOptions !== undefined });
+  // Routes use this to keep a "Thought process" section off models that never emit one.
+  return Object.assign(result, { thinks: modelShowsReasoning({ providerOptions }) });
 }
