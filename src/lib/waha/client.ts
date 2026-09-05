@@ -1,5 +1,7 @@
 import "server-only";
 
+import { toWhatsappText } from "./text";
+
 /** No-ops until WAHA_BASE_URL/WAHA_API_KEY/WAHA_WEBHOOK_SECRET are set — approvals still record the
  *  outbound message locally so the dashboard and books stay correct even without a live WhatsApp session. */
 export function isWahaConfigured() {
@@ -50,7 +52,7 @@ export async function sendWhatsappMessage(session: string, chatId: string, text:
 
   const data = await wahaJson<{ id?: string }>("WhatsApp send", "/api/sendText", {
     method: "POST",
-    body: JSON.stringify({ session, chatId, text }),
+    body: JSON.stringify({ session, chatId, text: toWhatsappText(text) }),
   });
   return { sent: true as const, providerMessageId: data.id ?? null };
 }

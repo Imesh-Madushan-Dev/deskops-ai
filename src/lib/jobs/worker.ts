@@ -85,14 +85,12 @@ async function processJob(job: { business_id: string; job_type: string; payload:
 
     // Drop the last row (the message we're answering — runOrchestrator appends it itself).
     const history: ModelMessage[] = (msgs ?? []).slice(0, -1).map((m) => ({ role: m.direction === "inbound" ? "user" : "assistant", content: m.body }));
+    // Style lives in customerSystemPrompt — one source of truth. This note used to restate it and
+    // contradict it ("a blank line between points" is exactly the paragraph formatting we do not
+    // want), and the model followed whichever it read last. Only per-run facts belong here.
     const whatsappStyle = [
-      "You are replying to a customer on WhatsApp. Write like a warm, real shop assistant — not a robot.",
-      "Formatting (WhatsApp, NOT markdown): use *single asterisks* for bold — never **double**. Use _underscores_ for italics.",
-      "Keep messages short. Break them into a few short lines with a blank line between points, so it reads clean on a phone — never one dense block.",
-      "Talk like a person, not a catalog. Say product names naturally ('the canvas tote', 'the black tee') — never copy formal catalog punctuation like em dashes (—) or SKU-style names into chat. No dashes as decoration.",
-      "Don't repeat yourself. If you already said the price or asked a question, don't say it again in the next message. One question per message, max.",
+      "Talk like a person, not a catalog. Say product names naturally ('the canvas tote', 'the black tee') — never copy catalog punctuation like em dashes or SKU-style names into chat.",
       "After sending a product image with sendProductImage, the caption already says everything — reply with NOTHING (empty text) unless the customer asked something else that still needs an answer.",
-      "Language: match the customer's LAST message exactly. English message → reply only in English. සිංහල message → reply only in සිංහල. Singlish mix → reply the same casual mixed way. Never switch to a different language than the one the customer just used.",
       autoInvoice
         ? "When you draft an invoice it is sent to the customer right away — tell them here is their quote."
         : "When you draft an invoice it must be confirmed by the shop owner first — so tell the customer their quote is being prepared and will be confirmed in a few minutes.",
@@ -101,8 +99,10 @@ async function processJob(job: { business_id: string; job_type: string; payload:
       ? `${whatsappStyle}\n\nYou are chatting with an existing customer "${contactLabel(conv.customers)}" (customer id ${conv.customer_id}). Never ask them for their WhatsApp number — use this customer id directly for any invoice.`
       : whatsappStyle;
 
-    // A customer is waiting on WhatsApp — the fast tier, not whatever the owner picked for the copilot.
-    const result = await runOrchestrator({ ...payload, history, contextNote, surface: "customer", tier: "fast", businessOverride: { businessId: job.business_id } });
+    // Standard, not fast: a real customer is being sold to, often in Sinhala or mixed script, and
+    // the cheapest tier writes it badly. Fixed tier either way — never whatever the owner picked
+    // for their copilot, which they change for their own reasons.
+    const result = await runOrchestrator({ ...payload, history, contextNote, surface: "customer", tier: "standard", businessOverride: { businessId: job.business_id } });
     const reply = (await result.text).trim();
 
     // Auto-send invoices the agent just drafted, if the owner enabled it. The invoice body already
