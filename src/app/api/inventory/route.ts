@@ -19,8 +19,8 @@ export async function POST(request: Request) {
   const parsed = adjustSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid stock adjustment." }, { status: 400 });
   try {
-    await adjustStock(parsed.data.productId, parsed.data.delta, parsed.data.reason);
-    return NextResponse.json({ ok: true });
+    const stockQty = await adjustStock(parsed.data.productId, parsed.data.delta, parsed.data.reason);
+    return NextResponse.json({ ok: true, stockQty });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to adjust stock" }, { status: 400 });
   }

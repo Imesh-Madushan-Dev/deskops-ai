@@ -123,14 +123,13 @@ export async function archiveProduct(id: string) {
   if (error) throw error;
 }
 
-export async function adjustStock(id: string, delta: number, reason: "restock" | "adjustment") {
-  const { supabase, business } = await getCurrentBusiness();
-  const { data: product, error: fetchError } = await supabase.from("products").select("stock_qty").eq("business_id", business.id).eq("id", id).single();
-  if (fetchError) throw fetchError;
-  const nextQty = product.stock_qty + delta;
-  if (nextQty < 0) throw new Error("Stock cannot go below zero.");
-  const { error: updateError } = await supabase.from("products").update({ stock_qty: nextQty }).eq("business_id", business.id).eq("id", id);
-  if (updateError) throw updateError;
-  const { error: movementError } = await supabase.from("stock_movements").insert({ business_id: business.id, product_id: id, delta, reason });
-  if (movementError) throw movementError;
+/** Runs the atomic adjust_stock() Postgres function and returns the resulting quantity.
+ *  Never split this back into a client-side read-update-insert: stock_movements is server-written
+ *  (clients hold only SELECT on it), so the movement insert is denied by RLS while the quantity
+ *  update has already committed — an error next to a number that silently moved. */
+export async function adjustStock(id: string, delta: number, reason: "restock" | "adjustment", refId?: string) {
+  const { supabase } = await getCurrentBusiness();
+  const { data, error } = await supabase.rpc("adjust_stock", { p_product_id: id, p_delta: delta, p_reason: reason, p_ref_id: refId ?? null });
+  if (error) throw error;
+  return data;
 }

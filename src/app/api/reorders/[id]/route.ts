@@ -10,8 +10,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const parsed = statusSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
   try {
-    await markReorderStatus(id, parsed.data.status);
-    return NextResponse.json({ ok: true });
+    const { productId, stockQty } = await markReorderStatus(id, parsed.data.status);
+    return NextResponse.json({ ok: true, productId, stockQty });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update reorder" }, { status: 400 });
   }

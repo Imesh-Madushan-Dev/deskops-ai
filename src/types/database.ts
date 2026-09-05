@@ -1001,6 +1001,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adjust_stock: {
+        Args: { p_product_id: string; p_delta: number; p_reason: string; p_ref_id?: string | null }
+        Returns: number
+      }
       delete_customer_cascade: {
         Args: { p_customer_id: string }
         Returns: undefined

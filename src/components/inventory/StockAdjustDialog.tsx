@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useAdjustStock } from "@/lib/query/inventory";
 
@@ -41,15 +40,18 @@ function AdjustForm({ target, onOpenChange }: { target: AdjustTarget; onOpenChan
   // The ledger refuses negative stock; say so before the request rather than after it fails.
   const tooLow = valid && next < 0;
 
-  async function submit() {
+  // Close on click, not on response. The row updates optimistically, so waiting on the round trip
+  // only holds a dialog open over a number that has already changed behind it.
+  function submit() {
     if (!valid || tooLow || delta === 0) return;
-    try {
-      await adjust.mutateAsync({ productId: target.id, delta, reason: MODES[mode].reason });
-      toast.success(`${MODES[mode].verb} — ${target.name} is now ${next}`);
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't update stock.");
-    }
+    adjust.mutate(
+      { productId: target.id, delta, reason: MODES[mode].reason },
+      {
+        onSuccess: ({ stockQty }) => toast.success(`${MODES[mode].verb} — ${target.name} is now ${stockQty}`),
+        onError: (error) => toast.error(error instanceof Error ? error.message : "Couldn't update stock."),
+      },
+    );
+    onOpenChange(false);
   }
 
   return (
@@ -101,8 +103,7 @@ function AdjustForm({ target, onOpenChange }: { target: AdjustTarget; onOpenChan
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} disabled={!valid || tooLow || delta === 0 || adjust.isPending} className="btn-purple border-0">
-            {adjust.isPending && <Spinner />}
+          <Button onClick={submit} disabled={!valid || tooLow || delta === 0} className="btn-purple border-0">
             Update stock
           </Button>
         </DialogFooter>

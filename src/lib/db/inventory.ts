@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getCurrentBusiness } from "@/lib/db/auth";
+import { adjustStock } from "@/lib/db/products";
 
 export async function listLowStock() {
   const { supabase, business } = await getCurrentBusiness();
@@ -70,14 +71,10 @@ export async function markReorderStatus(id: string, status: "ordered" | "receive
   const { error: updateError } = await supabase.from("reorders").update({ status }).eq("business_id", business.id).eq("id", id);
   if (updateError) throw updateError;
 
+  // Receiving a delivery is the same job as a manual adjustment, so it goes through the same atomic
+  // function — the hand-rolled version here hit the same stock_movements RLS wall and half-applied.
   if (status === "received" && reorder.status !== "received") {
-    const { data: product, error: productError } = await supabase.from("products").select("stock_qty").eq("business_id", business.id).eq("id", reorder.product_id).single();
-    if (productError) throw productError;
-    const { error: stockError } = await supabase.from("products").update({ stock_qty: product.stock_qty + reorder.quantity }).eq("business_id", business.id).eq("id", reorder.product_id);
-    if (stockError) throw stockError;
-    const { error: movementError } = await supabase
-      .from("stock_movements")
-      .insert({ business_id: business.id, product_id: reorder.product_id, delta: reorder.quantity, reason: "restock", ref_id: id });
-    if (movementError) throw movementError;
+    return { productId: reorder.product_id, stockQty: await adjustStock(reorder.product_id, reorder.quantity, "restock", id) };
   }
+  return { productId: null, stockQty: null };
 }
