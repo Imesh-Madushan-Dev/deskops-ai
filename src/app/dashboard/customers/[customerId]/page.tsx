@@ -1,6 +1,7 @@
-import { CustomerDetailView } from "@/components/customers/CustomerDetailView";
+import { redirect } from "next/navigation";
 
-export default async function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
+/** Customer profiles open in a sheet on the directory now; this keeps old links working. */
+export default async function CustomerPage({ params }: { params: Promise<{ customerId: string }> }) {
   const { customerId } = await params;
-  return <CustomerDetailView customerId={customerId} />;
+  redirect(`/dashboard/customers?c=${customerId}`);
 }

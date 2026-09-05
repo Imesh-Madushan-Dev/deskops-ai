@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,16 @@ import { Label } from "@/components/ui/label";
 import { contactLabel } from "@/lib/utils/contact";
 import { useCreateCustomer, useCustomers } from "@/lib/query/customers";
 import { EmptyState, InitialsAvatar, PageIntro, PageShell, Panel, relativeTime, SearchField } from "@/components/dashboard/ui";
+import { CustomerSheet } from "@/components/customers/CustomerSheet";
 
 export default function CustomersPage() {
+  // Deep links (?c=<id>, and the old /customers/[id] route) open straight into the sheet.
+  const searchParams = useSearchParams();
   const { data: customers, isLoading } = useCustomers();
   const createCustomer = useCreateCustomer();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string | null>(searchParams.get("c"));
   const [error, setError] = useState<string | null>(null);
 
   const filtered = (customers ?? []).filter((c) => `${c.name ?? ""} ${c.whatsapp_number} ${c.email ?? ""}`.toLowerCase().includes(search.toLowerCase()));
@@ -55,17 +59,24 @@ export default function CustomersPage() {
             />
           )}
           {filtered.map((customer) => (
-            <Link key={customer.id} href={`/dashboard/customers/${customer.id}`} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40">
+            <button
+              key={customer.id}
+              type="button"
+              onClick={() => setSelected(customer.id)}
+              className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/40"
+            >
               <InitialsAvatar name={contactLabel(customer)} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{customer.name ?? contactLabel(customer)}</p>
                 <p className="truncate text-xs text-muted-foreground">{contactLabel({ whatsapp_number: customer.whatsapp_number })}{customer.email ? ` · ${customer.email}` : ""}</p>
               </div>
               <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">added {relativeTime(customer.created_at)}</span>
-            </Link>
+            </button>
           ))}
         </div>
       </Panel>
+
+      <CustomerSheet customerId={selected} onClose={() => setSelected(null)} />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

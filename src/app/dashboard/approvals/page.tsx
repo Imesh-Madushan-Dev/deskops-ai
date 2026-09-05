@@ -5,7 +5,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, CheckmarkCircle02Icon, InvoiceIcon, ShieldIcon, Tick02Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Spinner } from "@/components/ui/spinner";
 import { useApprovals, useDecideApproval } from "@/lib/query/approvals";
 import { useDashboardOverview } from "@/lib/query/dashboard";
 import { useUpdateBusiness } from "@/lib/query/settings";
@@ -53,11 +52,6 @@ export default function ApprovalsPage() {
       </Panel>
 
       <div className="mt-6 space-y-4">
-        {decide.isError && (
-          <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {decide.error instanceof Error ? decide.error.message : "Action failed."}
-          </p>
-        )}
         {isLoading && <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>}
         {!isLoading && pending.length === 0 && (
           <Panel>
@@ -85,11 +79,14 @@ export default function ApprovalsPage() {
                     <p className="mt-2.5 rounded-xl border border-border/60 bg-muted/30 px-3.5 py-2.5 text-sm leading-6 whitespace-pre-wrap text-foreground/90">{describeApproval(approval.payload)}</p>
                   </div>
                 </div>
+                {/* No `decide.isPending` gate: it is shared by every card, so one slow invoice send
+                    disabled the whole queue and span a spinner on unrelated rows. Each decision is
+                    independent, and the row it targets is already removed optimistically. */}
                 <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:pl-13.5">
-                  <Button disabled={decide.isPending} onClick={() => decide.mutate({ id: approval.id, action: "approve" })} className="btn-purple h-9 rounded-lg border-0 px-4">
-                    {decide.isPending ? <Spinner /> : <HugeiconsIcon icon={Tick02Icon} size={16} />} Approve &amp; send
+                  <Button onClick={() => decide.mutate({ id: approval.id, action: "approve", actionType: approval.action_type })} className="btn-purple h-9 rounded-lg border-0 px-4">
+                    <HugeiconsIcon icon={Tick02Icon} size={16} /> Approve &amp; send
                   </Button>
-                  <Button variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: approval.id, action: "reject" })} className="h-9 rounded-lg px-4">
+                  <Button variant="outline" onClick={() => decide.mutate({ id: approval.id, action: "reject", actionType: approval.action_type })} className="h-9 rounded-lg px-4">
                     <HugeiconsIcon icon={Cancel01Icon} size={16} /> Reject
                   </Button>
                   <span className="ml-auto hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex"><HugeiconsIcon icon={ShieldIcon} size={13} /> Idempotent — safe to retry</span>

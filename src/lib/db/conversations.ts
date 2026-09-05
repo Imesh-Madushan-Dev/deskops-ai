@@ -14,7 +14,26 @@ export async function listConversations() {
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
   // Hide status-broadcast / channel / group chats that older webhooks may have recorded.
-  return data.filter((c) => !c.customers?.whatsapp_number || !isSystemChatId(c.customers.whatsapp_number));
+  const visible = data.filter((c) => !c.customers?.whatsapp_number || !isSystemChatId(c.customers.whatsapp_number));
+  if (visible.length === 0) return visible.map((c) => ({ ...c, lastMessage: null }));
+
+  // One query for every thread's newest message, rather than N round-trips from the list.
+  // ponytail: fetches the last 300 messages across the shown threads and keeps the first per
+  // conversation — swap for a lateral-join view if the inbox ever outgrows that.
+  const { data: recent, error: recentError } = await supabase
+    .from("messages")
+    .select("conversation_id, body, sender, direction, created_at")
+    .eq("business_id", business.id)
+    .in("conversation_id", visible.map((c) => c.id))
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (recentError) throw recentError;
+
+  const newest = new Map<string, { body: string; sender: string; direction: string; created_at: string }>();
+  for (const message of recent ?? []) {
+    if (!newest.has(message.conversation_id)) newest.set(message.conversation_id, message);
+  }
+  return visible.map((c) => ({ ...c, lastMessage: newest.get(c.id) ?? null }));
 }
 
 export async function getConversation(id: string) {

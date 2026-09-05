@@ -78,7 +78,7 @@ export function CommandPalette({ open, onOpenChange, onOpenCopilot }: { open: bo
             <CommandSeparator />
             <CommandGroup heading="Customers">
               {customers.slice(0, 30).map((c) => (
-                <CommandItem key={c.id} value={`customer ${c.name ?? ""} ${c.whatsapp_number}`} onSelect={() => go(`/dashboard/customers/${c.id}`)}>
+                <CommandItem key={c.id} value={`customer ${c.name ?? ""} ${c.whatsapp_number}`} onSelect={() => go(`/dashboard/customers?c=${c.id}`)}>
                   <HugeiconsIcon icon={UserGroupIcon} size={16} /> {contactLabel(c)}
                 </CommandItem>
               ))}
@@ -90,7 +90,7 @@ export function CommandPalette({ open, onOpenChange, onOpenCopilot }: { open: bo
             <CommandSeparator />
             <CommandGroup heading="Invoices">
               {invoices.slice(0, 30).map((inv) => (
-                <CommandItem key={inv.id} value={`invoice ${inv.number} ${contactLabel(inv.customers)}`} onSelect={() => go(`/dashboard/invoices/${inv.id}`)}>
+                <CommandItem key={inv.id} value={`invoice ${inv.number} ${contactLabel(inv.customers)}`} onSelect={() => go(`/dashboard/invoices?invoice=${inv.id}`)}>
                   <HugeiconsIcon icon={InvoiceIcon} size={16} /> {inv.number}
                   <span className="ml-auto text-xs text-muted-foreground capitalize">{inv.status}</span>
                 </CommandItem>

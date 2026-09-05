@@ -126,8 +126,8 @@ export function OverviewView() {
                       <p className="mt-0.5 text-xs text-muted-foreground">{meta.label} · {relativeTime(item.created_at)}</p>
                     </div>
                     <div className="flex shrink-0 gap-1.5">
-                      <Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, action: "approve" })} className="btn-purple h-8 rounded-lg border-0 px-3 text-xs"><HugeiconsIcon icon={Tick02Icon} size={14} /> Approve</Button>
-                      <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, action: "reject" })} className="h-8 rounded-lg px-2.5 text-xs" aria-label="Reject"><HugeiconsIcon icon={Cancel01Icon} size={14} /></Button>
+                      <Button size="sm" onClick={() => decide.mutate({ id: item.id, action: "approve", actionType: item.action_type })} className="btn-purple h-8 rounded-lg border-0 px-3 text-xs"><HugeiconsIcon icon={Tick02Icon} size={14} /> Approve</Button>
+                      <Button size="sm" variant="outline" onClick={() => decide.mutate({ id: item.id, action: "reject", actionType: item.action_type })} className="h-8 rounded-lg px-2.5 text-xs" aria-label="Reject"><HugeiconsIcon icon={Cancel01Icon} size={14} /></Button>
                     </div>
                   </div>
                 );
@@ -157,7 +157,7 @@ export function OverviewView() {
           <Panel title="Recent conversations" action={<Link href="/dashboard/inbox" className="text-xs font-medium text-primary hover:underline">Inbox →</Link>}>
             <div className="divide-y divide-border/60">
               {(conversations ?? []).slice(0, 5).map((c) => (
-                <Link key={c.id} href={`/dashboard/inbox/${c.id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
+                <Link key={c.id} href={`/dashboard/inbox?c=${c.id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
                   <InitialsAvatar name={contactLabel(c.customers)} className="size-8 text-[10px]" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{contactLabel(c.customers)}</p>
