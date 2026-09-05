@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       history: chat.history,
       surface: "customer",
     });
-    return result.toUIMessageStreamResponse({ onError: assistantErrorMessage });
+    return result.toUIMessageStreamResponse({ onError: assistantErrorMessage, sendReasoning: result.thinks });
   } catch (error) {
     return assistantErrorResponse(error);
   }

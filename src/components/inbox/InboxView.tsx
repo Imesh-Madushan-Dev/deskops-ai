@@ -8,6 +8,7 @@ import { AiBrain01Icon, ArrowLeft01Icon, BubbleChatIcon, SentIcon, WhatsappIcon 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
+import { DotmSquare11 } from "@/components/ui/dotm-square-11";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { contactLabel } from "@/lib/utils/contact";
@@ -252,8 +253,11 @@ function ThreadPane({ conversationId, onBack }: { conversationId: string; onBack
               {agentReply ? (
                 <AgentMessageParts message={agentReply} streaming={agentRunning} />
               ) : (
-                <span className="t-shimmer text-sm" data-text="Thinking…">
-                  Thinking…
+                <span className="flex items-center gap-2 text-sm">
+                  <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0" />
+                  <span className="t-shimmer" data-text="Drafting a reply…">
+                    Drafting a reply…
+                  </span>
                 </span>
               )}
             </div>

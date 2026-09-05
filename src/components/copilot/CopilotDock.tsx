@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
+import { DefaultChatTransport, isReasoningUIPart, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowExpand01Icon,
@@ -92,6 +92,40 @@ function Chip({
   );
 }
 
+/** Copilot chats have no server-side store, so the transcript lives in this browser only: it
+ *  survives a reload and a page navigation, never leaves the device, and is not shared between
+ *  devices or with the agents. Capped so a long session can't fill the storage quota.
+ *  ponytail: localStorage, not Supabase — give it a table when history needs to follow the user. */
+const HISTORY_KEY = "deskops.copilot.history";
+const HISTORY_LIMIT = 60;
+
+function readHistory(): UIMessage[] {
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(parsed)) return [];
+    // Trim on read too, so a transcript saved by an older build can't poison the next send.
+    const messages = parsed as UIMessage[];
+    const lastAnswer = messages.findLastIndex((message) => message.role === "assistant");
+    return lastAnswer === -1 ? [] : messages.slice(0, lastAnswer + 1);
+  } catch {
+    return []; // private window, blocked storage, or a stale shape — start clean.
+  }
+}
+
+/** Only complete turns are stored. A user message whose run failed has no assistant reply, and
+ *  restoring it would put two user turns back to back in the history sent on the next send —
+ *  which providers reject, breaking every later message in the thread. */
+function writeHistory(messages: UIMessage[]) {
+  const lastAnswer = messages.findLastIndex((message) => message.role === "assistant");
+  const complete = lastAnswer === -1 ? [] : messages.slice(0, lastAnswer + 1);
+  try {
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(complete.slice(-HISTORY_LIMIT)));
+  } catch {
+    // Quota or blocked storage — losing history is not worth breaking the chat over.
+  }
+}
+
 export function CopilotDock() {
   const pathname = usePathname();
   const router = useRouter();
@@ -99,13 +133,14 @@ export function CopilotDock() {
 
   const [input, setInput] = useState("");
   const [open, setOpen] = useState(false);
-  const [tall, setTall] = useState(false);
+  const [full, setFull] = useState(false);
   const [offline, setOffline] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [durations, setDurations] = useState<Record<string, number>>({});
   const [workOpen, setWorkOpen] = useState<Record<string, boolean>>({});
   const [modelId, setModelId] = useState<string | null>(null);
 
+  const cardRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const startedAt = useRef<number | null>(null);
@@ -119,6 +154,34 @@ export function CopilotDock() {
     // An error must never land inside a collapsed card.
     onError: () => setOpen(true),
   });
+
+  // Restore the transcript after a reload. Runs once; reading storage during render would make
+  // the server and client markup disagree.
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current) return;
+    hydrated.current = true;
+    const saved = readHistory();
+    if (saved.length > 0) setMessages(saved);
+  }, [setMessages]);
+
+  // Never write an empty transcript: both effects run in the same commit on mount, so this one
+  // still sees the pre-hydration empty array and would wipe what was just restored. Clearing is
+  // explicit, in newChat.
+  useEffect(() => {
+    if (messages.length > 0) writeHistory(messages);
+  }, [messages]);
+
+  // Collapse on an outside click. Pointerdown, not click, so it also fires when the press lands
+  // on something that stops the click; full screen keeps its own backdrop instead.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!cardRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
 
   const busy = status === "submitted" || status === "streaming";
   const errorCopy = describeAssistantError(error, offline);
@@ -208,6 +271,7 @@ export function CopilotDock() {
   }
 
   function newChat() {
+    writeHistory([]);
     setMessages([]);
     setDurations({});
     setWorkOpen({});
@@ -217,10 +281,23 @@ export function CopilotDock() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pl-68">
-        <div className="pointer-events-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-border/70 bg-card shadow-lg">
-          <div className="t-extend" style={{ gridTemplateRows: cardOpen ? "1fr" : "0fr" }}>
-            <div className="min-h-0 overflow-hidden">
+      <div
+        className={cn(
+          "pointer-events-none fixed z-30 flex justify-center",
+          full && cardOpen
+            ? "inset-0 bg-background/60 p-3 backdrop-blur-sm sm:p-6"
+            : "inset-x-0 bottom-0 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pl-68",
+        )}
+      >
+        <div
+          ref={cardRef}
+          className={cn(
+            "pointer-events-auto flex w-full flex-col overflow-hidden border border-border/70 bg-card shadow-lg",
+            full && cardOpen ? "h-full max-w-5xl rounded-2xl" : "max-w-2xl rounded-3xl",
+          )}
+        >
+          <div className={cn("t-extend", full && cardOpen && "min-h-0 flex-1")} style={{ gridTemplateRows: cardOpen ? "1fr" : "0fr" }}>
+            <div className={cn("min-h-0 overflow-hidden", full && cardOpen && "flex h-full flex-col")}>
               <header className="flex items-center justify-between px-3 py-2">
                 <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                   <HugeiconsIcon icon={SparklesIcon} size={14} className="text-primary" />
@@ -229,9 +306,9 @@ export function CopilotDock() {
                 <div className="flex items-center gap-0.5">
                   <IconButton icon={PencilEdit01Icon} label="New chat" onClick={newChat} />
                   <IconButton
-                    icon={tall ? ArrowShrink01Icon : ArrowExpand01Icon}
-                    label={tall ? "Shrink panel" : "Expand panel"}
-                    onClick={() => setTall((value) => !value)}
+                    icon={full ? ArrowShrink01Icon : ArrowExpand01Icon}
+                    label={full ? "Exit full screen" : "Full screen"}
+                    onClick={() => setFull((value) => !value)}
                   />
                   <IconButton icon={Cancel01Icon} label="Close" onClick={() => setOpen(false)} />
                 </div>
@@ -240,8 +317,8 @@ export function CopilotDock() {
               <div
                 ref={scrollRef}
                 className={cn(
-                  "flex flex-col gap-4 overflow-y-auto px-4 pb-4 transition-[max-height] duration-350",
-                  tall ? "max-h-[70vh]" : "max-h-[40vh]",
+                  "flex flex-col gap-4 overflow-y-auto px-4 pb-4",
+                  full && cardOpen ? "min-h-0 flex-1" : "max-h-[40vh] transition-[max-height] duration-350",
                 )}
               >
                 {messages.map((message) =>

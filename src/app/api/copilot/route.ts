@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         ? `You are chatting with the business owner inside their dashboard (not with a customer). ${contextNote}`
         : "You are chatting with the business owner inside their dashboard (not with a customer).",
     });
-    return result.toUIMessageStreamResponse({ onError: assistantErrorMessage });
+    return result.toUIMessageStreamResponse({ onError: assistantErrorMessage, sendReasoning: result.thinks });
   } catch (error) {
     return assistantErrorResponse(error);
   }

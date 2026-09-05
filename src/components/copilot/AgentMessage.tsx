@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AlertCircleIcon, ArrowDown01Icon, CheckmarkCircle02Icon, Clock01Icon } from "@hugeicons/core-free-icons";
 import { getToolName, isReasoningUIPart, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
+import { DotmSquare11 } from "@/components/ui/dotm-square-11";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 
@@ -87,10 +88,26 @@ export function AgentMessageParts({
 
   return (
     <div className="flex flex-col">
+      {/* A run that has not emitted reasoning or a tool call yet still needs to look alive. */}
+      {streaming && !hasWork && (
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0" />
+          <span className="t-shimmer" data-text={label}>
+            {label}
+          </span>
+        </span>
+      )}
       {hasWork && (
         <Collapsible open={open} onOpenChange={onOpenChange}>
           <CollapsibleTrigger className="group flex w-full items-center gap-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground">
-            {streaming ? <span className="t-shimmer" data-text={label}>{label}</span> : <span>{label}</span>}
+            {streaming ? (
+              <>
+                <DotmSquare11 size={16} dotSize={2} ariaLabel="" className="shrink-0" />
+                <span className="t-shimmer" data-text={label}>{label}</span>
+              </>
+            ) : (
+              <span>{label}</span>
+            )}
             <HugeiconsIcon
               icon={ArrowDown01Icon}
               size={14}

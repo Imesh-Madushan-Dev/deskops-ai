@@ -92,5 +92,7 @@ export async function runOrchestrator(input: {
     },
   });
 
-  return result;
+  // A model with no thinking config never produces real reasoning; the routes use this to keep a
+  // "Thought process" section off turns that have none to show.
+  return Object.assign(result, { thinks: providerOptions !== undefined });
 }

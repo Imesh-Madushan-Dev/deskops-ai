@@ -8,13 +8,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProviderLogo } from "./ProviderLogo";
 import { useModelInfo } from "@/lib/query/settings";
 
-const TIER_HINTS = { fast: "Quick lookups", standard: "Everyday work", thinking: "Multi-step analysis" } as const;
+/** Grouped by what the model is FOR, not who made it — the owner is choosing depth for this
+ *  question, and the maker is already on every row as a logo. */
+const TIERS = [
+  { key: "fast", label: "Fast Models" },
+  { key: "standard", label: "Standard Models" },
+  { key: "thinking", label: "Thinking Models" },
+] as const;
 
 /** What the route falls back to when the client sends no modelId — keep in step with the
  *  copilot route's `tier`, so the label always names the model that will actually run. */
@@ -61,29 +66,29 @@ export function ModelPicker({ value, onChange }: { value: string | null; onChang
           aria-label="Choose model"
           className="t-press inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
-          <ProviderLogo providerId={active.providerId} className="size-3.5 shrink-0" />
+          <ProviderLogo providerId={active.providerId} className="size-3 shrink-0" />
           <span className="max-w-28 truncate">{active.label}</span>
           <HugeiconsIcon icon={ArrowDown01Icon} size={14} />
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuRadioGroup value={active.id} onValueChange={onChange}>
-          {providers.map((provider, index) => (
-            <div key={provider.id}>
-              {index > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="flex items-center gap-2 text-muted-foreground">
-                <ProviderLogo providerId={provider.id} className="size-3.5 shrink-0" />
-                {provider.label}
-              </DropdownMenuLabel>
-              {provider.models.map((model) => (
-                <DropdownMenuRadioItem key={model.id} value={model.id} className="gap-2">
-                  <span className="flex-1 truncate">{model.label}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{TIER_HINTS[model.tier]}</span>
-                </DropdownMenuRadioItem>
-              ))}
-            </div>
-          ))}
+          {TIERS.map((tier, index) => {
+            const models = all.filter((model) => model.tier === tier.key);
+            if (models.length === 0) return null;
+            return (
+              <div key={tier.key} className={index > 0 ? "mt-1" : undefined}>
+                <DropdownMenuLabel className="text-xs text-muted-foreground">{tier.label}</DropdownMenuLabel>
+                {models.map((model) => (
+                  <DropdownMenuRadioItem key={model.id} value={model.id} className="gap-2 text-xs">
+                    <ProviderLogo providerId={model.providerId} className="size-3 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{model.label}</span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </div>
+            );
+          })}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
