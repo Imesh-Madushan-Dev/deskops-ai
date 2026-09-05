@@ -4,7 +4,7 @@ import { getCurrentBusiness } from "@/lib/db/auth";
 import { createInvoice, reviseInvoice, voidInvoice, InvoicePaidError } from "@/lib/db/invoices";
 import { createApproval } from "@/lib/db/approvals";
 import { formatMoney } from "@/lib/utils/money";
-import { sameOrder } from "@/lib/utils/invoice";
+import { sameOrder, statedByCustomer } from "@/lib/utils/invoice";
 import { contactLabel } from "@/lib/utils/contact";
 import { sendWhatsappImage } from "@/lib/waha/client";
 import { sendInvoiceToCustomer } from "@/lib/invoice/send";
@@ -259,10 +259,47 @@ export function createSalesTools(context: ConversationToolContext) {
       const { supabase, business } = await getCurrentBusiness(context.businessOverride);
       const cid = await currentCustomerId(supabase);
       if (!cid) return { saved: false as const, note: "No customer record for this chat yet." };
-      const patch = { ...(name && { name }), ...(address && { address }), ...(phone && { phone }) };
-      if (!Object.keys(patch).length) return { saved: false as const, note: "Nothing to save — ask for the missing detail first." };
+
+      const fields = [
+        ["name", name, "text"],
+        ["address", address, "text"],
+        ["phone", phone, "phone"],
+      ].filter(([, value]) => value) as ["name" | "address" | "phone", string, "text" | "phone"][];
+      if (!fields.length) return { saved: false as const, note: "Nothing to save — ask for the missing detail first." };
+
+      // A detail the customer never typed must never reach a Bill To. Everything is checked against
+      // their own messages, so the agent cannot satisfy the invoice guard with a plausible guess.
+      const { data: inbound } = await supabase
+        .from("messages")
+        .select("body")
+        .eq("business_id", business.id)
+        .eq("conversation_id", context.conversationId)
+        .eq("direction", "inbound")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      const said = (inbound ?? []).map((m) => m.body ?? "").join(" ");
+
+      const verified = fields.filter(([, value, kind]) => statedByCustomer(said, value, kind));
+      const notStated = fields.filter((f) => !verified.includes(f)).map(([field]) => field);
+      if (!verified.length) {
+        return {
+          saved: false as const,
+          notStated,
+          note: `The customer has not told you their ${notStated.join(", ")} — do NOT guess it, and never reuse their WhatsApp number as the phone unless they typed it. Ask them for it and save only what they actually reply.`,
+        };
+      }
+
+      const patch: { name?: string; address?: string; phone?: string } = {};
+      for (const [field, value] of verified) patch[field] = value;
       await supabase.from("customers").update(patch).eq("business_id", business.id).eq("id", cid);
-      return { saved: true as const, note: "Saved. If name, address and phone are now all on file, you can create the invoice." };
+      return {
+        saved: true as const,
+        savedFields: Object.keys(patch),
+        ...(notStated.length ? { notStated } : {}),
+        note: notStated.length
+          ? `Saved ${Object.keys(patch).join(", ")}. The ${notStated.join(", ")} was NOT saved because the customer never told you — ask for it before invoicing.`
+          : "Saved. If name, address and phone are now all on file, you can create the invoice.",
+      };
     },
   });
 
