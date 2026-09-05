@@ -15,7 +15,6 @@ import {
   InvoiceIcon,
   Logout01Icon,
   PackageIcon,
-  PieChartIcon,
   Settings02Icon,
   UserGroupIcon,
   WhatsappIcon,
@@ -78,7 +77,7 @@ function ProfileCard() {
 }
 
 function NavContent({ groups, pathname, onNavigate }: { groups: NavGroup[]; pathname: string; onNavigate?: () => void }) {
-  // Only the longest matching href wins, so /dashboard/books/reports lights Reports, not Books too.
+  // Only the longest matching href wins, so a nested route lights its own item, not its parent too.
   const activeHref = groups
     .flatMap((group) => group.items.map((item) => item.href))
     .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
@@ -175,7 +174,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       label: "Intelligence",
       items: [
         { href: "/dashboard/books", label: "Books", icon: ChartLineData01Icon },
-        { href: "/dashboard/books/reports", label: "Reports", icon: PieChartIcon },
         { href: "/dashboard/settings", label: "Settings", icon: Settings02Icon },
       ],
     },

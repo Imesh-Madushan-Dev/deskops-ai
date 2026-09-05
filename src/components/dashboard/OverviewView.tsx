@@ -94,7 +94,7 @@ export function OverviewView() {
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
-          <Panel title="Revenue" sub={`Income booked to the ledger, last ${DAYS} days`} action={<Link href="/dashboard/books/reports" className="text-xs font-medium text-primary hover:underline">Reports →</Link>}>
+          <Panel title="Revenue" sub={`Income booked to the ledger, last ${DAYS} days`} action={<Link href="/dashboard/books" className="text-xs font-medium text-primary hover:underline">Books →</Link>}>
             <div className="h-64 px-2 pt-4 pb-2">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={series} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, ChartLineData01Icon, DollarCircleIcon, PieChartIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -38,6 +37,8 @@ function BooksTooltip({ active, payload, label, currency }: { active?: boolean; 
 export default function BooksPage() {
   const { data: entries, isLoading } = useLedgerEntries();
   const { data: report } = useBooksReport();
+  // Bars are scaled to the largest category, so they compare sizes rather than all sitting full.
+  const maxCategoryAmount = Math.max(...(report?.byCategory.map((r) => Math.abs(r.amount)) ?? [0]), 1);
   const { data: overview } = useDashboardOverview();
   const createEntry = useCreateLedgerEntry();
   const [open, setOpen] = useState(false);
@@ -77,7 +78,6 @@ export default function BooksPage() {
       crumbs={["Books"]}
       actions={
         <>
-          <Link href="/dashboard/books/reports"><Button variant="outline" className="h-9 rounded-lg px-3.5 text-sm"><HugeiconsIcon icon={PieChartIcon} size={16} /> Reports</Button></Link>
           <Button className="btn-purple h-9 rounded-lg border-0 px-4 text-sm" onClick={() => setOpen(true)}><HugeiconsIcon icon={Add01Icon} size={16} /> Add entry</Button>
         </>
       }
@@ -103,6 +103,31 @@ export default function BooksPage() {
               <Bar dataKey="expense" fill="var(--chart-2)" radius={[4, 4, 0, 0]} maxBarSize={18} />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      </Panel>
+
+      <Panel className="mt-6" title="By category" sub="This month · positive is income, negative is spend">
+        <div className="divide-y divide-border/60">
+          {report?.byCategory.length === 0 && <EmptyState icon={PieChartIcon} title="No entries this month" hint="Categories appear here as the ledger fills up." />}
+          {report?.byCategory.map((row) => {
+            const positive = row.amount >= 0;
+            const pct = Math.max(4, Math.round((Math.abs(row.amount) / maxCategoryAmount) * 100));
+            return (
+              <div key={row.category} className="flex items-center gap-4 px-5 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="truncate text-sm font-medium">{row.category}</p>
+                    <span className={cn("font-mono text-sm tabular-nums", positive ? "text-[#047857] dark:text-[#34d399]" : "text-destructive")}>
+                      {formatMoney(row.amount, currency)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <span className={cn("block h-full rounded-full", positive ? "bg-chart-1" : "bg-chart-2")} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Panel>
 
