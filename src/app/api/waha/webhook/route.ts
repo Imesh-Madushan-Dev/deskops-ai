@@ -6,6 +6,7 @@ import { enqueueJob } from "@/lib/jobs/enqueue";
 import { runJobWorker } from "@/lib/jobs/worker";
 import { isSystemChatId } from "@/lib/utils/contact";
 import { resolveLidToPhone } from "@/lib/waha/client";
+import { APP_DISABLED_RESPONSE_BODY, isAppEnabled } from "@/lib/app-status";
 
 // The agent's tool loop can take several seconds; give it room past the default.
 export const maxDuration = 60;
@@ -26,6 +27,7 @@ const wahaEventSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!isAppEnabled()) return NextResponse.json(APP_DISABLED_RESPONSE_BODY, { status: 503 });
   const rawBody = await request.text();
   const signature = request.headers.get("x-webhook-hmac") ?? request.headers.get("x-webhook-signature") ?? request.headers.get("x-waha-signature");
   const algorithm = request.headers.get("x-webhook-hmac-algorithm") ?? (request.headers.has("x-webhook-hmac") ? "sha512" : "sha256");
